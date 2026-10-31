@@ -1,15 +1,23 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 
 @main
 struct DevHubApp: App {
     @StateObject private var cm = ConnectionManager()
     @StateObject private var notes = NotesStore()
     @StateObject private var app = AppState()
+    @StateObject private var clip = ClipStore()
 
     init() {
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    private func summon() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
+        app.showPalette = true
     }
 
     var body: some Scene {
@@ -18,6 +26,8 @@ struct DevHubApp: App {
                 .environmentObject(cm)
                 .environmentObject(notes)
                 .environmentObject(app)
+                .environmentObject(clip)
+                .onAppear { GlobalHotKey.register { summon() } }
         }
         .commands {
             CommandGroup(after: .textEditing) {
@@ -67,8 +77,14 @@ struct MenuBarContent: View {
             }
         }
         Divider()
+        Toggle("Restore last session on launch", isOn: $cm.restoreLast)
+        Toggle("Launch DevHub at login", isOn: Binding(
+            get: { SMAppService.mainApp.status == .enabled },
+            set: { on in try? (on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()) }
+        ))
+        Divider()
         Button("Open DevHub") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
         Button("Disconnect all") { cm.stopAll() }
-        Button("Quit") { cm.stopAll(); NSApp.terminate(nil) }
+        Button("Quit") { NSApp.terminate(nil) }
     }
 }

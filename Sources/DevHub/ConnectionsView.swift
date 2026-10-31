@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 struct ConnectionsView: View {
     @EnvironmentObject var cm: ConnectionManager
@@ -8,7 +10,9 @@ struct ConnectionsView: View {
     var groups: [String] { Array(Set(cm.profiles.map(\.group))).sorted() }
 
     var body: some View {
-        HSplitView {
+        VStack(spacing: 0) {
+            AuthBanner()
+            HSplitView {
             VStack(alignment: .leading, spacing: 0) {
                 List(selection: $app.selectedProfile) {
                     ForEach(groups, id: \.self) { g in
@@ -30,6 +34,8 @@ struct ConnectionsView: View {
                 HStack {
                     Button { editing = Profile() } label: { Label("Add profile", systemImage: "plus") }
                     Spacer()
+                    Button("Import") { importProfiles() }
+                    Button("Export") { exportProfiles() }
                 }.padding(8)
             }
             .frame(minWidth: Theme.listWidth, idealWidth: Theme.listWidth, maxWidth: Theme.listWidth + 80)
@@ -40,8 +46,47 @@ struct ConnectionsView: View {
             } else {
                 Text("Select a profile").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            }
         }
         .sheet(item: $editing) { p in ProfileEditor(profile: p) }
+    }
+
+    private func exportProfiles() {
+        let p = NSSavePanel()
+        p.nameFieldStringValue = "devhub-profiles.json"
+        p.allowedContentTypes = [.json]
+        if p.runModal() == .OK, let u = p.url { cm.exportProfiles(to: u) }
+    }
+
+    private func importProfiles() {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = [.json]
+        if p.runModal() == .OK, let u = p.url { _ = cm.importProfiles(from: u) }
+    }
+}
+
+struct AuthBanner: View {
+    @EnvironmentObject var cm: ConnectionManager
+
+    var body: some View {
+        if cm.gcloudAuthExpired || cm.adcExpired {
+            VStack(spacing: 0) {
+                if cm.gcloudAuthExpired { row("gcloud login expired - IAP tunnels will fail", "gcloud auth login", adc: false) }
+                if cm.adcExpired { row("Application Default Credentials expired - cloud-sql-proxy will fail", "gcloud auth application-default login", adc: true) }
+                Divider()
+            }
+        }
+    }
+
+    private func row(_ msg: String, _ cmd: String, adc: Bool) -> some View {
+        HStack {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+            Text(msg).font(.callout)
+            Spacer()
+            Button("Run `\(cmd)`") { cm.googleLogin(adc: adc) }.buttonStyle(.borderedProminent).tint(.red)
+        }
+        .padding(.horizontal, Theme.page).padding(.vertical, 8)
+        .background(Color.red.opacity(0.12))
     }
 }
 
@@ -83,6 +128,7 @@ struct ProfileDetail: View {
                 Spacer()
                 Button(cm.isActive(p) ? "Disconnect" : "Connect") { cm.toggle(p) }.buttonStyle(.borderedProminent)
                 Button("Restart") { cm.restart(p) }
+                if p.port > 0 { copyMenu }
                 Button("Edit", action: onEdit)
             }
             Text(p.command).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
@@ -115,6 +161,18 @@ struct ProfileDetail: View {
                 }
             }.padding().frame(width: 360)
         }
+    }
+
+    private var copyMenu: some View {
+        Menu("Copy") {
+            let c = ConnInfo.match(port: p.port)
+            Button("host:port  (127.0.0.1:\(p.port))") { ConnInfo.copy("127.0.0.1:\(p.port)") }
+            Button("PostgreSQL URL") { ConnInfo.copy(ConnInfo.url(engine: "postgresql", port: p.port, conn: c, includePassword: false)) }
+            Button("PostgreSQL URL (with password)") { ConnInfo.copy(ConnInfo.url(engine: "postgresql", port: p.port, conn: c, includePassword: true)) }
+            Button("MySQL URL") { ConnInfo.copy(ConnInfo.url(engine: "mysql", port: p.port, conn: c, includePassword: false)) }
+            Button("psql command") { ConnInfo.copy("psql -h 127.0.0.1 -p \(p.port) -U \(c?.user ?? "USER") -d \(c?.database ?? "DB")") }
+            Button("mysql command") { ConnInfo.copy("mysql -h 127.0.0.1 -P \(p.port) -u \(c?.user ?? "USER") \(c?.database ?? "")") }
+        }.fixedSize()
     }
 
     private func send() {
@@ -166,6 +224,7 @@ struct ProfileEditor: View {
                 TextField("Local port", text: $portText)
                 TextField("Working dir (optional)", text: $profile.workDir)
                 Toggle("Auto-reconnect on crash", isOn: $profile.autoReconnect)
+                Toggle("Start automatically when DevHub opens", isOn: $profile.autoStart)
                 TextField("Re-auth secret name (Vault, optional)", text: $profile.reauthSecret)
             }
             Text("Command (use {{secret:name}} for Vault values)").font(.caption)
@@ -187,5 +246,27 @@ struct ProfileEditor: View {
         }
         .padding().frame(width: 520)
         .onAppear { portText = profile.port > 0 ? String(profile.port) : "" }
+    }
+}
+
+enum ConnInfo {
+    /// A saved DB Query connection that targets the same local port, used to prefill user/db/password.
+    static func match(port: Int) -> DBConn? {
+        let store: DBStore = Store.load("db.json", default: DBStore())
+        return store.conns.first { $0.port == port }
+    }
+
+    static func url(engine: String, port: Int, conn: DBConn?, includePassword: Bool) -> String {
+        let allowed = CharacterSet.urlUserAllowed.subtracting(CharacterSet(charactersIn: ":@/?#"))
+        func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s }
+        let user = enc(conn?.user.isEmpty == false ? conn!.user : "USER")
+        var cred = user
+        if includePassword, let n = conn?.secretName, !n.isEmpty, let pw = Vault.get(n) { cred += ":" + enc(pw) }
+        return "\(engine)://\(cred)@127.0.0.1:\(port)/\(conn?.database ?? "DB")"
+    }
+
+    static func copy(_ s: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
     }
 }

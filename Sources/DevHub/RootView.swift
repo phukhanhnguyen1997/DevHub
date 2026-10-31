@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum Tab: String, CaseIterable, Identifiable {
-    case connections = "Connections", notes = "Notes", db = "DB Query", ports = "Ports", vault = "Vault", tools = "Tools"
+    case connections = "Connections", notes = "Notes", clipboard = "Clipboard", db = "DB Query", ports = "Ports", vault = "Vault", tools = "Tools"
     var id: String { rawValue }
     var icon: String {
         switch self {
         case .connections: return "bolt.horizontal.circle"
         case .notes: return "note.text"
+        case .clipboard: return "doc.on.clipboard"
         case .db: return "cylinder.split.1x2"
         case .ports: return "network"
         case .vault: return "key"
@@ -18,6 +19,7 @@ enum Tab: String, CaseIterable, Identifiable {
 @MainActor
 final class AppState: ObservableObject {
     @Published var tab: Tab = .connections
+    @Published var toolKind: ToolKind = .json
     @Published var showPalette = false
     @Published var selectedProfile: UUID?
     @Published var openNote: String?
@@ -47,6 +49,7 @@ struct RootView: View {
             switch app.tab {
             case .connections: ConnectionsView()
             case .notes: NotesView()
+            case .clipboard: ClipboardView()
             case .db: DBQueryView()
             case .ports: PortsView()
             case .vault: VaultView()

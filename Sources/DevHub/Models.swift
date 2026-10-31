@@ -12,6 +12,25 @@ struct Profile: Codable, Identifiable, Hashable {
     var reauthPatterns = "Password:\nreauthenticat\nSASL authentication failed\nUnauthorized\nsession expired"
     var reauthSecret = ""
     var autoReconnect = true
+    var autoStart = false
+
+    init() {}
+
+    // Tolerant decoding so profiles saved by older versions still load.
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "profile"
+        group = try c.decodeIfPresent(String.self, forKey: .group) ?? "dev"
+        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "DB"
+        command = try c.decodeIfPresent(String.self, forKey: .command) ?? ""
+        port = try c.decodeIfPresent(Int.self, forKey: .port) ?? 0
+        workDir = try c.decodeIfPresent(String.self, forKey: .workDir) ?? ""
+        reauthPatterns = try c.decodeIfPresent(String.self, forKey: .reauthPatterns) ?? ""
+        reauthSecret = try c.decodeIfPresent(String.self, forKey: .reauthSecret) ?? ""
+        autoReconnect = try c.decodeIfPresent(Bool.self, forKey: .autoReconnect) ?? true
+        autoStart = try c.decodeIfPresent(Bool.self, forKey: .autoStart) ?? false
+    }
 }
 
 enum RunState: String {

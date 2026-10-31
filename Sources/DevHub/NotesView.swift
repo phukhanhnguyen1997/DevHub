@@ -6,13 +6,22 @@ enum NoteMode: String, CaseIterable { case preview = "Preview", edit = "Edit", r
 struct NotesView: View {
     @EnvironmentObject var notes: NotesStore
     @EnvironmentObject var app: AppState
+    @EnvironmentObject var cm: ConnectionManager
     @State private var query = ""
+    @State private var tagFilter: String?
+    @State private var pinned: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "pinnedNotes") ?? [])
+    @State private var jumpTo: Int?
     @State private var selected: String?
     @State private var text = ""
     @State private var saved = ""
     @State private var mode: NoteMode = .preview
 
-    var hits: [NoteHit] { notes.search(query) }
+    var hits: [NoteHit] {
+        var h = notes.search(query)
+        if let t = tagFilter { h = h.filter { $0.tags.contains(t) } }
+        if query.isEmpty { h = h.filter { pinned.contains($0.path) } + h.filter { !pinned.contains($0.path) } }
+        return h
+    }
     var dirty: Bool { text != saved }
 
     var body: some View {
@@ -52,6 +61,19 @@ struct NotesView: View {
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 28)
             }.padding(Theme.page)
 
+            if !notes.allTags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(notes.allTags, id: \.self) { t in
+                            Text("#\(t)").font(.caption)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(tagFilter == t ? Color.accentColor.opacity(0.35) : Color.primary.opacity(0.08), in: Capsule())
+                                .onTapGesture { tagFilter = tagFilter == t ? nil : t }
+                        }
+                    }.padding(.horizontal, Theme.page)
+                }.padding(.bottom, 8)
+            }
+
             Divider()
 
             if hits.isEmpty {
@@ -86,7 +108,10 @@ struct NotesView: View {
     private func noteRow(_ h: NoteHit) -> some View {
         let on = selected == h.path
         return VStack(alignment: .leading, spacing: 3) {
-            Text(h.title).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
+            HStack(spacing: 4) {
+                if pinned.contains(h.path) { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.orange) }
+                Text(h.title).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
+            }
             if !h.snippet.isEmpty {
                 Text(h.snippet).font(.caption).foregroundStyle(Color.secondary).lineLimit(2)
             } else {
@@ -115,6 +140,9 @@ struct NotesView: View {
                         Text(URL(fileURLWithPath: sel).lastPathComponent).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
+                    Button { togglePin(sel) } label: { Image(systemName: pinned.contains(sel) ? "pin.fill" : "pin") }
+                        .buttonStyle(.borderless).help("Pin note")
+                    outlineMenu
                     Picker("", selection: $mode) { ForEach(NoteMode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                         .pickerStyle(.segmented).frame(width: 290).labelsHidden()
                     Button("Save") { save(sel) }.disabled(!dirty).keyboardShortcut("s", modifiers: .command)
@@ -137,13 +165,67 @@ struct NotesView: View {
         }
     }
 
+    private var outlineMenu: some View {
+        let hs = MDParser.headings(text)
+        return Menu {
+            ForEach(Array(hs.enumerated()), id: \.offset) { _, h in
+                Button(String(repeating: "   ", count: max(0, h.level - 1)) + h.text) { mode = .preview; jumpTo = h.index }
+            }
+        } label: { Image(systemName: "list.bullet.indent") }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 28).disabled(hs.isEmpty).help("Outline")
+    }
+
     private var previewPane: some View {
-        ScrollView {
-            MarkdownView(source: text)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    MarkdownView(source: text, onMakeProfile: makeProfile)
+                    backlinksSection
+                }
                 .frame(maxWidth: Theme.readingWidth, alignment: .leading)
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .onChange(of: jumpTo) { _, new in
+                if let new { withAnimation { proxy.scrollTo(new, anchor: .top) }; jumpTo = nil }
+            }
         }
+        .environment(\.openURL, OpenURLAction { url in
+            guard url.scheme == "devhub-note" else { return .systemAction }
+            let name = (url.host(percentEncoded: false) ?? "").removingPercentEncoding ?? ""
+            if let p = notes.resolve(name) { selected = p } else { NSSound.beep() }
+            return .handled
+        })
+    }
+
+    @ViewBuilder
+    private var backlinksSection: some View {
+        if let sel = selected {
+            let links = notes.backlinks(to: sel)
+            if !links.isEmpty {
+                Divider()
+                Text("Linked from").font(.headline)
+                ForEach(links) { l in
+                    Button { selected = l.path } label: { Label(l.title, systemImage: "arrow.turn.up.left") }.buttonStyle(.link)
+                }
+            }
+        }
+    }
+
+    private func makeProfile(_ code: String) {
+        var p = Profile()
+        p.name = NotesStore.title(text, selected ?? "note")
+        p.command = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let m = p.command.range(of: "(?:-L\\s*|--local-port[= ]|--port[= ]|:)(\\d{4,5})(?::|\\b)", options: .regularExpression),
+           let n = Int(p.command[m].filter(\.isNumber)) { p.port = n }
+        cm.upsert(p)
+        app.selectedProfile = p.id
+        app.tab = .connections
+    }
+
+    private func togglePin(_ path: String) {
+        if pinned.contains(path) { pinned.remove(path) } else { pinned.insert(path) }
+        UserDefaults.standard.set(Array(pinned), forKey: "pinnedNotes")
     }
 
     private var editorPane: some View {
@@ -245,6 +327,28 @@ struct PaletteView: View {
             out.append(Item(title: "Disable group \(g)", subtitle: "Group", icon: "bolt.slash") { cm.stopGroup(g) })
         }
         let q = query.trimmingCharacters(in: .whitespaces)
+        func copyItem(_ title: String, _ value: @autoclosure @escaping () -> String) -> Item {
+            Item(title: title, subtitle: "Copy to clipboard", icon: "doc.on.doc") {
+                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(value(), forType: .string)
+            }
+        }
+        out.append(copyItem("Generate UUID v4", UUID().uuidString.lowercased()))
+        out.append(copyItem("Generate UUID v7", ToolsView.uuid7()))
+        out.append(copyItem("Generate Mongo ObjectId", IDGen.objectId()))
+        out.append(copyItem("Generate ULID", IDGen.ulid()))
+        out.append(copyItem("Epoch seconds now", String(Int(Date().timeIntervalSince1970))))
+        out.append(copyItem("Epoch ms now", String(Int(Date().timeIntervalSince1970 * 1000))))
+        out.append(copyItem("Random password (24)", String((0..<24).map { _ in "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*".randomElement()! })))
+        for k in ToolKind.allCases {
+            out.append(Item(title: "Open tool: \(k.rawValue)", subtitle: "Tools", icon: "wrench.and.screwdriver") { app.toolKind = k; app.tab = .tools })
+        }
+        var tsItem: Item?
+        if let n = Double(q), n > 1_000_000_000 {
+            let ms = n > 100_000_000_000
+            let d = Date(timeIntervalSince1970: ms ? n / 1000 : n)
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"; f.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")
+            tsItem = copyItem("\(f.string(from: d)) GMT+7", f.string(from: d))
+        }
         let actions = q.isEmpty ? out : out.filter { $0.title.localizedCaseInsensitiveContains(q) || $0.subtitle.localizedCaseInsensitiveContains(q) }
         var noteItems: [Item] = []
         if !q.isEmpty {
@@ -254,7 +358,7 @@ struct PaletteView: View {
                 }
             }
         }
-        return Array((actions.prefix(8) + noteItems))
+        return Array(([tsItem].compactMap { $0 } + actions.prefix(8) + noteItems))
     }
 
     var body: some View {

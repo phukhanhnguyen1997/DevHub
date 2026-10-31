@@ -36,6 +36,13 @@ enum MDBlock: Identifiable {
 }
 
 enum MDParser {
+    static func headings(_ src: String) -> [(index: Int, level: Int, text: String)] {
+        parse(src).enumerated().compactMap { i, b in
+            if case .heading(let l, let t) = b { return (i, l, t) }
+            return nil
+        }
+    }
+
     static func parse(_ src: String) -> [MDBlock] {
         var lines = src.components(separatedBy: "\n")
         // strip YAML front matter
@@ -128,6 +135,7 @@ enum MDParser {
 
 struct MarkdownView: View {
     let source: String
+    var onMakeProfile: ((String) -> Void)? = nil
 
     var body: some View {
         let blocks = MDParser.parse(source)
@@ -139,7 +147,18 @@ struct MarkdownView: View {
     }
 
     static func inline(_ s: String) -> AttributedString {
-        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnly))) ?? AttributedString(s)
+        // [[note]] / [[note|label]] become links handled by the notes view
+        var s = s
+        if let re = try? NSRegularExpression(pattern: "\\[\\[([^\\]|]+)(?:\\|([^\\]]+))?\\]\\]") {
+            let ns = s as NSString
+            for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)).reversed() {
+                let target = ns.substring(with: m.range(at: 1))
+                let label = m.range(at: 2).location != NSNotFound ? ns.substring(with: m.range(at: 2)) : target
+                let enc = target.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? target
+                s = (s as NSString).replacingCharacters(in: m.range, with: "[\(label)](devhub-note://\(enc))")
+            }
+        }
+        return (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnly))) ?? AttributedString(s)
     }
 
     @ViewBuilder
@@ -155,7 +174,7 @@ struct MarkdownView: View {
         case .paragraph(let text):
             Text(Self.inline(text)).font(.system(size: 14.5)).lineSpacing(5)
         case .code(let lang, let code):
-            CodeCard(lang: lang, code: code)
+            CodeCard(lang: lang, code: code, onMakeProfile: onMakeProfile)
         case .list(let items):
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, it in
@@ -199,6 +218,7 @@ struct MarkdownView: View {
 struct CodeCard: View {
     let lang: String
     let code: String
+    var onMakeProfile: ((String) -> Void)? = nil
     @State private var copied = false
 
     var body: some View {
@@ -206,6 +226,10 @@ struct CodeCard: View {
             HStack {
                 Text(lang.isEmpty ? "code" : lang).font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                if let onMakeProfile, ["", "sh", "bash", "zsh", "shell", "console"].contains(lang.lowercased()) {
+                    Button { onMakeProfile(code) } label: { Label("Make profile", systemImage: "bolt.badge.plus").font(.caption) }
+                        .buttonStyle(.borderless).help("Create a Connection profile from this command")
+                }
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(Vault.substitute(code), forType: .string)

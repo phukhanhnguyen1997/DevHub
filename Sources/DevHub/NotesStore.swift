@@ -6,6 +6,7 @@ struct NoteHit: Identifiable, Hashable {
     let path: String
     let title: String
     let snippet: String
+    var tags: [String] = []
 }
 
 @MainActor
@@ -113,8 +114,9 @@ final class NotesStore: ObservableObject {
 
     private func reloadAll() {
         var out: [NoteHit] = []
-        query("SELECT path, title FROM notes_fts ORDER BY title COLLATE NOCASE") { st in
-            out.append(NoteHit(path: Self.text(st, 0), title: Self.text(st, 1), snippet: ""))
+        query("SELECT path, title, tags FROM notes_fts ORDER BY title COLLATE NOCASE") { st in
+            out.append(NoteHit(path: Self.text(st, 0), title: Self.text(st, 1), snippet: "",
+                               tags: Self.text(st, 2).split(separator: " ").map(String.init)))
         }
         all = out
     }
@@ -123,9 +125,35 @@ final class NotesStore: ObservableObject {
         let tokens = q.split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "_" }).map { "\"\($0)\"*" }
         guard !tokens.isEmpty else { return all }
         var out: [NoteHit] = []
-        let sql = "SELECT path, title, snippet(notes_fts, 4, '[', ']', '…', 14) FROM notes_fts WHERE notes_fts MATCH ? ORDER BY rank LIMIT 30"
+        let sql = "SELECT path, title, snippet(notes_fts, 4, '[', ']', '…', 14), tags FROM notes_fts WHERE notes_fts MATCH ? ORDER BY rank LIMIT 30"
         query(sql, [tokens.joined(separator: " ")]) { st in
-            out.append(NoteHit(path: Self.text(st, 0), title: Self.text(st, 1), snippet: Self.text(st, 2).replacingOccurrences(of: "\n", with: " ")))
+            out.append(NoteHit(path: Self.text(st, 0), title: Self.text(st, 1),
+                               snippet: Self.text(st, 2).replacingOccurrences(of: "\n", with: " "),
+                               tags: Self.text(st, 3).split(separator: " ").map(String.init)))
+        }
+        return out
+    }
+
+    var allTags: [String] { Array(Set(all.flatMap(\.tags))).sorted() }
+
+    /// Resolves a `[[wiki link]]` target by title or file name.
+    func resolve(_ name: String) -> String? {
+        let n = name.trimmingCharacters(in: .whitespaces).lowercased()
+        return all.first {
+            $0.title.lowercased() == n || URL(fileURLWithPath: $0.path).deletingPathExtension().lastPathComponent.lowercased() == n
+        }?.path
+    }
+
+    /// Notes whose body contains a `[[link]]` pointing at the given note.
+    func backlinks(to path: String) -> [NoteHit] {
+        guard let me = all.first(where: { $0.path == path }) else { return [] }
+        let names = [me.title, URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent].map { $0.lowercased() }
+        var out: [NoteHit] = []
+        query("SELECT path, title, body FROM notes_fts WHERE path != ?", [path]) { st in
+            let body = Self.text(st, 2).lowercased()
+            if names.contains(where: { body.contains("[[\($0)]]") || body.contains("[[\($0)|") }) {
+                out.append(NoteHit(path: Self.text(st, 0), title: Self.text(st, 1), snippet: ""))
+            }
         }
         return out
     }

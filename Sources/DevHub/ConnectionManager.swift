@@ -1,5 +1,7 @@
 import Foundation
 import Darwin
+import AppKit
+import Network
 
 @MainActor
 final class ConnectionManager: ObservableObject {
@@ -12,12 +14,126 @@ final class ConnectionManager: ObservableObject {
     private var intentional: Set<UUID> = []
     private var retries: [UUID: Int] = [:]
     private var timer: Timer?
+    private var authTimer: Timer?
+    private var desired: Set<UUID> = []
+    private var pathMonitor: NWPathMonitor?
+    private var lastPathOK = true
     private let maxLog = 200_000
+
+    @Published var gcloudAuthExpired = false
+    @Published var adcExpired = false
+    @Published var restoreLast: Bool = UserDefaults.standard.bool(forKey: "restoreLast") {
+        didSet { UserDefaults.standard.set(restoreLast, forKey: "restoreLast") }
+    }
 
     init() {
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.healthCheck() }
         }
+        authTimer = Timer.scheduledTimer(withTimeInterval: 180, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.checkGoogleAuth() }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { self?.recover(reason: "wake from sleep") }
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.shutdown() }
+        }
+        let mon = NWPathMonitor()
+        mon.pathUpdateHandler = { [weak self] path in
+            let ok = path.status == .satisfied
+            Task { @MainActor in
+                guard let self else { return }
+                if ok && !self.lastPathOK {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.recover(reason: "network change") }
+                }
+                self.lastPathOK = ok
+            }
+        }
+        mon.start(queue: .global())
+        pathMonitor = mon
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.launchStart() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.checkGoogleAuth() }
+    }
+
+    // MARK: session / auto-start
+
+    private func launchStart() {
+        let last = Set((UserDefaults.standard.array(forKey: "lastSession") as? [String] ?? []).compactMap(UUID.init))
+        for p in profiles where p.autoStart || (restoreLast && last.contains(p.id)) { start(p) }
+    }
+
+    /// Remembers what was running, then stops every child so no orphaned tunnels keep ports busy.
+    func shutdown() {
+        let active = profiles.filter { procs[$0.id] != nil }.map { $0.id.uuidString }
+        UserDefaults.standard.set(active, forKey: "lastSession")
+        timer?.invalidate()
+        for p in profiles { if let proc = procs[p.id] { Self.killTree(proc.processIdentifier) } }
+    }
+
+    /// After sleep or a network change, restart tunnels the user wanted that lost their port.
+    func recover(reason: String) {
+        for p in profiles where desired.contains(p.id) && state(p) != .needsReauth {
+            let dead = procs[p.id] == nil
+            let portDown = p.port > 0 && !Self.portOpen(p.port)
+            guard dead || portDown else { continue }
+            append(p.id, "[DevHub] reconnecting after \(reason)\n")
+            retries[p.id] = 0
+            if let proc = procs[p.id] {
+                intentional.insert(p.id)
+                Self.killTree(proc.processIdentifier)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.start(p) }
+            } else { start(p) }
+        }
+        checkGoogleAuth()
+    }
+
+    // MARK: google auth pre-check
+
+    func usesGcloud(_ p: Profile) -> Bool { p.command.contains("gcloud") }
+    func usesADC(_ p: Profile) -> Bool { p.command.contains("cloud-sql-proxy") }
+
+    func checkGoogleAuth() {
+        let needGcloud = profiles.contains { usesGcloud($0) && procs[$0.id] != nil }
+        let needADC = profiles.contains { usesADC($0) && procs[$0.id] != nil }
+        guard needGcloud || needADC else { gcloudAuthExpired = false; adcExpired = false; return }
+        DispatchQueue.global().async {
+            let g = needGcloud ? shell("gcloud auth print-access-token >/dev/null 2>&1", timeout: 20).code != 0 : false
+            let a = needADC ? shell("gcloud auth application-default print-access-token >/dev/null 2>&1", timeout: 20).code != 0 : false
+            Task { @MainActor in
+                if g && !self.gcloudAuthExpired { Self.notify("gcloud login expired", "Run: gcloud auth login") }
+                if a && !self.adcExpired { Self.notify("gcloud ADC expired", "Run: gcloud auth application-default login") }
+                self.gcloudAuthExpired = g
+                self.adcExpired = a
+            }
+        }
+    }
+
+    func googleLogin(adc: Bool) {
+        let cmd = adc ? "gcloud auth application-default login" : "gcloud auth login"
+        DispatchQueue.global().async {
+            _ = shell(cmd, timeout: 300)
+            Task { @MainActor in self.checkGoogleAuth() }
+        }
+    }
+
+    // MARK: import / export
+
+    func exportProfiles(to url: URL) {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        if let d = try? enc.encode(profiles) { try? d.write(to: url) }
+    }
+
+    @discardableResult
+    func importProfiles(from url: URL) -> Int {
+        guard let d = try? Data(contentsOf: url), let list = try? JSONDecoder().decode([Profile].self, from: d) else { return 0 }
+        for var p in list {
+            if let existing = profiles.first(where: { $0.name == p.name && $0.group == p.group }) { p.id = existing.id }
+            upsert(p)
+        }
+        return list.count
     }
 
     func state(_ p: Profile) -> RunState { states[p.id] ?? .stopped }
@@ -49,6 +165,7 @@ final class ConnectionManager: ObservableObject {
     func start(_ p: Profile) {
         guard procs[p.id] == nil else { return }
         intentional.remove(p.id)
+        desired.insert(p.id)
         if p.port > 0 && Self.portOpen(p.port) {
             states[p.id] = .portConflict
             append(p.id, "[DevHub] port \(p.port) is already in use - free it in the Ports tab\n")
@@ -88,6 +205,7 @@ final class ConnectionManager: ObservableObject {
     }
 
     func stop(_ p: Profile) {
+        desired.remove(p.id)
         intentional.insert(p.id)
         retries[p.id] = 0
         if let proc = procs[p.id] { Self.killTree(proc.processIdentifier) } else { states[p.id] = .stopped }

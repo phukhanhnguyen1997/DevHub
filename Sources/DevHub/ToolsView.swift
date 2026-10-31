@@ -2,20 +2,31 @@ import SwiftUI
 import CryptoKit
 
 enum ToolKind: String, CaseIterable, Identifiable {
-    case json = "JSON", yaml = "JSON minify", base64 = "Base64", url = "URL", jwt = "JWT", hash = "Hash", uuid = "UUID / ObjectId", password = "Password", time = "Timestamp", regex = "Regex", diff = "Diff"
+    case json = "JSON", yaml = "JSON minify", base64 = "Base64", url = "URL", jwt = "JWT", hash = "Hash", uuid = "UUID / ObjectId", password = "Password", time = "Timestamp", regex = "Regex", diff = "Diff", cron = "Cron", sql = "SQL format", csv = "CSV / JSON / INSERT", ts = "JSON → TypeScript"
     var id: String { rawValue }
 }
 
 struct ToolsView: View {
-    @State private var kind: ToolKind = .json
+    @EnvironmentObject var app: AppState
+    @State private var csvMode = "CSV → JSON"
     @State private var input = ""
     @State private var extra = ""
     @State private var decode = false
 
+    var kind: ToolKind { app.toolKind }
+
+    private var toolPicker: some View {
+        HStack {
+            Picker("Tool", selection: $app.toolKind) { ForEach(ToolKind.allCases) { Text($0.rawValue).tag($0) } }
+                .pickerStyle(.menu).frame(width: 260)
+            Spacer()
+        }
+    }
+
     var body: some View {
         if [.password, .uuid, .diff].contains(kind) {
             VStack(alignment: .leading) {
-                Picker("", selection: $kind) { ForEach(ToolKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+                toolPicker
                 switch kind {
                 case .password: PasswordGenView()
                 case .uuid: IDGenView()
@@ -27,12 +38,18 @@ struct ToolsView: View {
 
     var mainBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("", selection: $kind) { ForEach(ToolKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+            toolPicker
             HStack {
+                if kind == .csv {
+                    Picker("", selection: $csvMode) {
+                        ForEach(["CSV → JSON", "JSON → CSV", "CSV → INSERT", "JSON → INSERT"], id: \.self) { Text($0) }
+                    }.pickerStyle(.segmented)
+                    if csvMode.hasSuffix("INSERT") { TextField("Table name", text: $extra).textFieldStyle(.roundedBorder).frame(width: 160) }
+                }
                 if [.base64, .url].contains(kind) { Toggle("Decode", isOn: $decode).toggleStyle(.switch) }
                 if kind == .regex { TextField("Regex pattern", text: $extra).textFieldStyle(.roundedBorder) }
             }
-            Text(kind == .time ? "Epoch (seconds or ms) or ISO-8601 - empty = now" : "Input").font(.caption).foregroundStyle(.secondary)
+            Text(kind == .time ? "Epoch (seconds or ms) or ISO-8601 - empty = now" : kind == .cron ? "Cron expression (5 fields)" : "Input").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $input).font(.system(.body, design: .monospaced)).frame(minHeight: 140).border(.gray.opacity(0.4))
             HStack {
                 Text("Output").font(.caption).foregroundStyle(.secondary)
@@ -71,6 +88,16 @@ struct ToolsView: View {
             SHA512: \(SHA512.hash(data: d).hex)
             """
         case .password: return ""
+        case .cron: return Cron.report(input)
+        case .sql: return SQLFormat.format(input)
+        case .ts: return TSGen.generate(input)
+        case .csv:
+            switch csvMode {
+            case "JSON → CSV": return CSVTool.jsonToCSV(input)
+            case "CSV → INSERT": return CSVTool.csvToInserts(input, table: extra)
+            case "JSON → INSERT": return CSVTool.jsonToInserts(input, table: extra)
+            default: return CSVTool.csvToJSON(input)
+            }
         case .uuid, .diff: return ""
         case .time: return Self.time(input)
         case .regex: return Self.regex(extra, input)
