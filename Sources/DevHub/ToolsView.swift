@@ -2,7 +2,7 @@ import SwiftUI
 import CryptoKit
 
 enum ToolKind: String, CaseIterable, Identifiable {
-    case json = "JSON", yaml = "JSON minify", base64 = "Base64", url = "URL", jwt = "JWT", hash = "Hash", uuid = "UUID", password = "Password", time = "Timestamp", regex = "Regex"
+    case json = "JSON", yaml = "JSON minify", base64 = "Base64", url = "URL", jwt = "JWT", hash = "Hash", uuid = "UUID / ObjectId", password = "Password", time = "Timestamp", regex = "Regex", diff = "Diff"
     var id: String { rawValue }
 }
 
@@ -13,10 +13,14 @@ struct ToolsView: View {
     @State private var decode = false
 
     var body: some View {
-        if kind == .password {
+        if [.password, .uuid, .diff].contains(kind) {
             VStack(alignment: .leading) {
                 Picker("", selection: $kind) { ForEach(ToolKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
-                PasswordGenView()
+                switch kind {
+                case .password: PasswordGenView()
+                case .uuid: IDGenView()
+                default: DiffView()
+                }
             }.padding()
         } else { mainBody }
     }
@@ -27,9 +31,8 @@ struct ToolsView: View {
             HStack {
                 if [.base64, .url].contains(kind) { Toggle("Decode", isOn: $decode).toggleStyle(.switch) }
                 if kind == .regex { TextField("Regex pattern", text: $extra).textFieldStyle(.roundedBorder) }
-                if kind == .uuid { Button("Regenerate") { input = String(Int.random(in: 0...Int.max)) } }
             }
-            Text(kind == .uuid ? "Generates v4, v7 and ULID-style values" : "Input").font(.caption).foregroundStyle(.secondary)
+            Text(kind == .time ? "Epoch (seconds or ms) or ISO-8601 - empty = now" : "Input").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $input).font(.system(.body, design: .monospaced)).frame(minHeight: 140).border(.gray.opacity(0.4))
             HStack {
                 Text("Output").font(.caption).foregroundStyle(.secondary)
@@ -68,7 +71,7 @@ struct ToolsView: View {
             SHA512: \(SHA512.hash(data: d).hex)
             """
         case .password: return ""
-        case .uuid: return "v4:   \(UUID().uuidString.lowercased())\nv7:   \(Self.uuid7())\nrand: \(Self.randomString(24))"
+        case .uuid, .diff: return ""
         case .time: return Self.time(input)
         case .regex: return Self.regex(extra, input)
         }
@@ -102,22 +105,34 @@ struct ToolsView: View {
 
     static func time(_ s: String) -> String {
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.isEmpty { return "Now: \(Int(Date().timeIntervalSince1970)) / \(Date().formatted(.iso8601))" }
-        if var n = Double(t) {
-            if n > 1e11 { n /= 1000 }
-            let d = Date(timeIntervalSince1970: n)
-            let f = ISO8601DateFormatter()
-            f.timeZone = TimeZone(identifier: "UTC")
-            let l = ISO8601DateFormatter()
-            l.timeZone = .current
-            return "UTC:   \(f.string(from: d))\nLocal: \(l.string(from: d))"
+        let tz7 = TimeZone(secondsFromGMT: 7 * 3600)!
+        func fmt(_ d: Date, _ tz: TimeZone, _ suffix: String) -> String {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.timeZone = tz
+            f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+            return f.string(from: d) + suffix
+        }
+        func report(_ d: Date) -> String {
+            let sec = Int(d.timeIntervalSince1970.rounded(.down))
+            let ms = Int((d.timeIntervalSince1970 * 1000).rounded(.down))
+            return """
+            Unix (s):   \(sec)
+            Unix (ms):  \(ms)
+            UTC (Z):    \(fmt(d, TimeZone(identifier: "UTC")!, "Z"))
+            GMT+7:      \(fmt(d, tz7, "+07:00"))
+            Local:      \(fmt(d, .current, ""))  [\(TimeZone.current.identifier)]
+            """
+        }
+        if t.isEmpty { return "NOW\n" + report(Date()) }
+        if let n = Double(t) {
+            let isMs = abs(n) >= 1e11
+            return "Input read as \(isMs ? "milliseconds" : "seconds")\n" + report(Date(timeIntervalSince1970: isMs ? n / 1000 : n))
         }
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: t) ?? ISO8601DateFormatter().date(from: t) {
-            return "seconds: \(Int(d.timeIntervalSince1970))\nmillis:  \(Int(d.timeIntervalSince1970 * 1000))"
-        }
-        return "Enter epoch (s/ms) or ISO-8601"
+        if let d = f.date(from: t) ?? ISO8601DateFormatter().date(from: t) { return report(d) }
+        return "Enter epoch (s/ms) or ISO-8601 (e.g. 2026-10-31T16:00:00Z or ...+07:00)"
     }
 
     static func regex(_ pattern: String, _ text: String) -> String {

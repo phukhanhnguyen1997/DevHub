@@ -32,6 +32,50 @@ final class NotesStore: ObservableObject {
         scan()
     }
 
+    /// Creates an empty note in the notes folder and returns its path.
+    func createNote(named name: String) -> String? {
+        guard !folder.isEmpty else { return nil }
+        var base = name.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "/", with: "-")
+        if base.isEmpty { base = "Untitled" }
+        if base.lowercased().hasSuffix(".md") { base = String(base.dropLast(3)) }
+        var url = URL(fileURLWithPath: folder).appendingPathComponent(base + ".md")
+        var n = 2
+        while FileManager.default.fileExists(atPath: url.path) {
+            url = URL(fileURLWithPath: folder).appendingPathComponent("\(base) \(n).md")
+            n += 1
+        }
+        do { try "# \(base)\n\n".write(to: url, atomically: true, encoding: .utf8) } catch { return nil }
+        scan()
+        return url.path
+    }
+
+    /// Copies .md files (or folders of them) into the notes folder.
+    @discardableResult
+    func importFiles(_ urls: [URL]) -> [String] {
+        guard !folder.isEmpty else { return [] }
+        let fm = FileManager.default
+        var added: [String] = []
+        func copy(_ src: URL) {
+            var dest = URL(fileURLWithPath: folder).appendingPathComponent(src.lastPathComponent)
+            if src.deletingLastPathComponent().path == folder { added.append(src.path); return }
+            var n = 2
+            while fm.fileExists(atPath: dest.path) {
+                dest = URL(fileURLWithPath: folder).appendingPathComponent("\(src.deletingPathExtension().lastPathComponent) \(n).md")
+                n += 1
+            }
+            if (try? fm.copyItem(at: src, to: dest)) != nil { added.append(dest.path) }
+        }
+        for u in urls {
+            var isDir: ObjCBool = false
+            fm.fileExists(atPath: u.path, isDirectory: &isDir)
+            if isDir.boolValue {
+                for case let f as URL in fm.enumerator(at: u, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) ?? NSEnumerator() where f.pathExtension.lowercased() == "md" { copy(f) }
+            } else if u.pathExtension.lowercased() == "md" || u.pathExtension.lowercased() == "markdown" { copy(u) }
+        }
+        scan()
+        return added
+    }
+
     @discardableResult
     private func exec(_ sql: String) -> Bool { sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK }
 

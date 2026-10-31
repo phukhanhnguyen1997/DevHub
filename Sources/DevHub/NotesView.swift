@@ -17,10 +17,15 @@ struct NotesView: View {
             VStack(spacing: 0) {
                 HStack {
                     TextField("Search notes (title, content, #tag)", text: $query).textFieldStyle(.roundedBorder)
+                    Button { newNote() } label: { Image(systemName: "square.and.pencil") }.help("New note")
+                    Button { importMD() } label: { Image(systemName: "square.and.arrow.down") }.help("Import .md files")
                     Button { pickFolder() } label: { Image(systemName: "folder") }.help("Choose notes folder")
                 }.padding(8)
                 if notes.folder.isEmpty {
-                    Text("Choose a folder containing .md files").foregroundStyle(.secondary).frame(maxHeight: .infinity)
+                    VStack(spacing: 8) {
+                        Text("Choose a notes folder first").foregroundStyle(.secondary)
+                        Button("Choose folder…") { pickFolder() }
+                    }.frame(maxHeight: .infinity)
                 } else {
                     List(hits, selection: $selected) { h in
                         VStack(alignment: .leading) {
@@ -29,7 +34,14 @@ struct NotesView: View {
                         }.tag(h.path)
                     }
                 }
-            }.frame(minWidth: 260, idealWidth: 300)
+            }
+            .frame(minWidth: 260, idealWidth: 300)
+            .dropDestination(for: URL.self) { urls, _ in
+                guard !notes.folder.isEmpty else { return false }
+                let added = notes.importFiles(urls)
+                if let f = added.first { selected = f }
+                return !added.isEmpty
+            }
 
             VStack(alignment: .leading) {
                 if let sel = selected {
@@ -93,6 +105,34 @@ struct NotesView: View {
 
     private func markdown(_ s: String) -> AttributedString {
         (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+    }
+
+    private func ensureFolder() -> Bool {
+        if notes.folder.isEmpty { pickFolder() }
+        return !notes.folder.isEmpty
+    }
+
+    private func newNote() {
+        guard ensureFolder() else { return }
+        let alert = NSAlert()
+        alert.messageText = "New note"
+        alert.informativeText = "File name (saved as .md in \(notes.folder))"
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        if let path = notes.createNote(named: field.stringValue) { query = ""; selected = path }
+    }
+
+    private func importMD() {
+        guard ensureFolder() else { return }
+        let p = NSOpenPanel()
+        p.canChooseFiles = true
+        p.canChooseDirectories = true
+        p.allowsMultipleSelection = true
+        p.message = "Select .md files or folders to copy into the notes folder"
+        if p.runModal() == .OK, let f = notes.importFiles(p.urls).first { query = ""; selected = f }
     }
 
     private func pickFolder() {
