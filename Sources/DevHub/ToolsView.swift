@@ -2,7 +2,7 @@ import SwiftUI
 import CryptoKit
 
 enum ToolKind: String, CaseIterable, Identifiable {
-    case json = "JSON", yaml = "JSON minify", base64 = "Base64", url = "URL", jwt = "JWT", hash = "Hash", uuid = "UUID", time = "Timestamp", regex = "Regex"
+    case json = "JSON", yaml = "JSON minify", base64 = "Base64", url = "URL", jwt = "JWT", hash = "Hash", uuid = "UUID", password = "Password", time = "Timestamp", regex = "Regex"
     var id: String { rawValue }
 }
 
@@ -13,6 +13,15 @@ struct ToolsView: View {
     @State private var decode = false
 
     var body: some View {
+        if kind == .password {
+            VStack(alignment: .leading) {
+                Picker("", selection: $kind) { ForEach(ToolKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+                PasswordGenView()
+            }.padding()
+        } else { mainBody }
+    }
+
+    var mainBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             Picker("", selection: $kind) { ForEach(ToolKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
             HStack {
@@ -58,6 +67,7 @@ struct ToolsView: View {
             SHA256: \(SHA256.hash(data: d).hex)
             SHA512: \(SHA512.hash(data: d).hex)
             """
+        case .password: return ""
         case .uuid: return "v4:   \(UUID().uuidString.lowercased())\nv7:   \(Self.uuid7())\nrand: \(Self.randomString(24))"
         case .time: return Self.time(input)
         case .regex: return Self.regex(extra, input)
@@ -143,4 +153,93 @@ struct ToolsView: View {
 
 extension Sequence where Element == UInt8 {
     var hex: String { map { String(format: "%02x", $0) }.joined() }
+}
+
+struct PasswordGenView: View {
+    @State private var length = 20.0
+    @State private var upper = true
+    @State private var lower = true
+    @State private var digits = true
+    @State private var symbols = true
+    @State private var noAmbiguous = true
+    @State private var customSymbols = "!@#$%^&*()-_=+[]{}:,.?"
+    @State private var exclude = ""
+    @State private var count = 5
+    @State private var results: [String] = []
+    @State private var vaultName = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Length: \(Int(length))").frame(width: 90, alignment: .leading)
+                Slider(value: $length, in: 8...128, step: 1)
+                Stepper("Count: \(count)", value: $count, in: 1...20).frame(width: 130)
+            }
+            HStack(spacing: 16) {
+                Toggle("A-Z", isOn: $upper)
+                Toggle("a-z", isOn: $lower)
+                Toggle("0-9", isOn: $digits)
+                Toggle("Symbols", isOn: $symbols)
+                Toggle("No ambiguous (0O1lI)", isOn: $noAmbiguous)
+            }
+            HStack {
+                TextField("Allowed symbols", text: $customSymbols).textFieldStyle(.roundedBorder).disabled(!symbols)
+                TextField("Exclude chars", text: $exclude).textFieldStyle(.roundedBorder)
+            }
+            HStack {
+                Button("Generate") { generate() }.buttonStyle(.borderedProminent)
+                TextField("Vault name", text: $vaultName).textFieldStyle(.roundedBorder).frame(width: 180)
+                Text("Entropy ≈ \(Int(entropy)) bits").font(.caption).foregroundStyle(.secondary)
+            }
+            List(results, id: \.self) { r in
+                HStack {
+                    Text(r).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                    Spacer()
+                    Button("Copy") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(r, forType: .string)
+                    }
+                    Button("Save to Vault") {
+                        guard !vaultName.isEmpty else { return }
+                        Vault.set(vaultName, r)
+                    }.disabled(vaultName.isEmpty)
+                }
+            }
+        }
+        .onAppear { if results.isEmpty { generate() } }
+        .onChange(of: length) { _, _ in generate() }
+        .onChange(of: upper) { _, _ in generate() }
+        .onChange(of: lower) { _, _ in generate() }
+        .onChange(of: digits) { _, _ in generate() }
+        .onChange(of: symbols) { _, _ in generate() }
+        .onChange(of: noAmbiguous) { _, _ in generate() }
+        .onChange(of: count) { _, _ in generate() }
+    }
+
+    private var pools: [[Character]] {
+        let excl = Set(exclude + (noAmbiguous ? "0O1lI|" : ""))
+        let defs: [(Bool, String)] = [
+            (upper, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"), (lower, "abcdefghijklmnopqrstuvwxyz"),
+            (digits, "0123456789"), (symbols, customSymbols),
+        ]
+        return defs.filter { $0.0 }.map { Array($0.1.filter { !excl.contains($0) }) }.filter { !$0.isEmpty }
+    }
+
+    private var entropy: Double {
+        let size = Set(pools.flatMap { $0 }).count
+        return size > 1 ? length * log2(Double(size)) : 0
+    }
+
+    private func generate() {
+        let pools = pools
+        guard !pools.isEmpty else { results = ["Select at least one character set"]; return }
+        let all = pools.flatMap { $0 }
+        let n = Int(length)
+        results = (0..<count).map { _ in
+            var chars = pools.prefix(n).map { $0.randomElement()! }
+            while chars.count < n { chars.append(all.randomElement()!) }
+            chars.shuffle()
+            return String(chars)
+        }
+    }
 }
