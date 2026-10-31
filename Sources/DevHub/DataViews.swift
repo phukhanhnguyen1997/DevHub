@@ -60,7 +60,7 @@ struct DBQueryView: View {
                         }.contentShape(Rectangle()).onTapGesture { sql = q.sql }
                     }
                 }
-            }.padding(8).frame(minWidth: 240, idealWidth: 270)
+            }.padding(Theme.page).frame(minWidth: Theme.listWidth, idealWidth: Theme.listWidth, maxWidth: Theme.listWidth + 80)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Read-only: SELECT / WITH / SHOW / EXPLAIN / DESCRIBE, single statement").font(.caption).foregroundStyle(.secondary)
@@ -79,7 +79,7 @@ struct DBQueryView: View {
                         .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                 }.padding(6).background(.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-            }.padding(8)
+            }.padding(Theme.page)
         }
         .sheet(item: $editing) { c in DBConnEditor(conn: c) { saved in
             if let i = store.conns.firstIndex(where: { $0.id == saved.id }) { store.conns[i] = saved } else { store.conns.append(saved) }

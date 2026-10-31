@@ -1,86 +1,24 @@
 import SwiftUI
 import AppKit
 
+enum NoteMode: String, CaseIterable { case preview = "Preview", edit = "Edit", split = "Split" }
+
 struct NotesView: View {
     @EnvironmentObject var notes: NotesStore
     @EnvironmentObject var app: AppState
     @State private var query = ""
     @State private var selected: String?
     @State private var text = ""
-    @State private var dirty = false
-    @State private var preview = false
+    @State private var saved = ""
+    @State private var mode: NoteMode = .preview
 
     var hits: [NoteHit] { notes.search(query) }
+    var dirty: Bool { text != saved }
 
     var body: some View {
         HSplitView {
-            VStack(spacing: 0) {
-                HStack {
-                    TextField("Search notes (title, content, #tag)", text: $query).textFieldStyle(.roundedBorder)
-                    Button { newNote() } label: { Image(systemName: "square.and.pencil") }.help("New note")
-                    Button { importMD() } label: { Image(systemName: "square.and.arrow.down") }.help("Import .md files")
-                    Button { pickFolder() } label: { Image(systemName: "folder") }.help("Choose notes folder")
-                }.padding(8)
-                if notes.folder.isEmpty {
-                    VStack(spacing: 8) {
-                        Text("No notes yet").foregroundStyle(.secondary)
-                        Button("Import .md files…") { importMD() }
-                        Button("Or index an existing folder…") { pickFolder() }
-                    }.frame(maxHeight: .infinity)
-                } else {
-                    List(hits, selection: $selected) { h in
-                        VStack(alignment: .leading) {
-                            Text(h.title).fontWeight(.medium)
-                            if !h.snippet.isEmpty { Text(h.snippet).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
-                        }.tag(h.path)
-                    }
-                }
-            }
-            .frame(minWidth: 260, idealWidth: 300)
-            .dropDestination(for: URL.self) { urls, _ in
-                guard !notes.folder.isEmpty else { return false }
-                let added = notes.importFiles(urls)
-                if let f = added.first { selected = f }
-                return !added.isEmpty
-            }
-
-            VStack(alignment: .leading) {
-                if let sel = selected {
-                    HStack {
-                        Text(URL(fileURLWithPath: sel).lastPathComponent).font(.headline)
-                        Spacer()
-                        Toggle("Preview", isOn: $preview).toggleStyle(.button)
-                        Button("Save") { save(sel) }.disabled(!dirty).keyboardShortcut("s", modifiers: .command)
-                    }
-                    if preview {
-                        ScrollView {
-                            Text(markdown(text)).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
-                        }
-                    } else {
-                        TextEditor(text: $text).font(.system(.body, design: .monospaced))
-                            .onChange(of: text) { _, _ in dirty = true }
-                    }
-                    let blocks = NotesStore.codeBlocks(text)
-                    if !blocks.isEmpty {
-                        Divider()
-                        Text("Code blocks").font(.caption).foregroundStyle(.secondary)
-                        ScrollView {
-                            ForEach(Array(blocks.enumerated()), id: \.offset) { _, b in
-                                HStack(alignment: .top) {
-                                    Text(b.code).font(.system(.caption, design: .monospaced)).lineLimit(6)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    Button("Copy") {
-                                        NSPasteboard.general.clearContents()
-                                        NSPasteboard.general.setString(Vault.substitute(b.code), forType: .string)
-                                    }
-                                }.padding(6).background(.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
-                            }
-                        }.frame(maxHeight: 160)
-                    }
-                } else {
-                    Text("Select a note").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }.padding(8)
+            sidebar.frame(minWidth: Theme.listWidth, idealWidth: Theme.listWidth, maxWidth: Theme.listWidth + 80)
+            detail.frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
         }
         .onChange(of: selected) { _, new in load(new) }
         .onChange(of: app.openNote) { _, new in
@@ -91,21 +29,142 @@ struct NotesView: View {
         }
     }
 
+    // MARK: sidebar
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search notes", text: $query).textFieldStyle(.plain)
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.line))
+                Menu {
+                    Button("New note", systemImage: "square.and.pencil") { newNote() }
+                    Button("Import .md files…", systemImage: "square.and.arrow.down") { importMD() }
+                    Button("Index another folder…", systemImage: "folder") { pickFolder() }
+                } label: { Image(systemName: "plus.circle.fill").font(.title3) }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 28)
+            }.padding(Theme.page)
+
+            Divider()
+
+            if hits.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: query.isEmpty ? "note.text" : "magnifyingglass").font(.largeTitle).foregroundStyle(.tertiary)
+                    Text(query.isEmpty ? "No notes yet" : "No results").foregroundStyle(.secondary)
+                    if query.isEmpty { Button("Import .md files…") { importMD() } }
+                    Text("Tip: drag .md files here").font(.caption).foregroundStyle(.tertiary)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(hits) { h in noteRow(h) }
+                    }.padding(10)
+                }
+            }
+            Divider()
+            HStack {
+                Text("\(notes.all.count) notes").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Text((notes.folder as NSString).abbreviatingWithTildeInPath).font(.caption2).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.head)
+            }.padding(.horizontal, Theme.page).padding(.vertical, 8)
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            _ = ensureFolder()
+            let added = notes.importFiles(urls)
+            if let f = added.first { selected = f }
+            return !added.isEmpty
+        }
+    }
+
+    private func noteRow(_ h: NoteHit) -> some View {
+        let on = selected == h.path
+        return VStack(alignment: .leading, spacing: 3) {
+            Text(h.title).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
+            if !h.snippet.isEmpty {
+                Text(h.snippet).font(.caption).foregroundStyle(Color.secondary).lineLimit(2)
+            } else {
+                Text(URL(fileURLWithPath: h.path).lastPathComponent).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(on ? Color.accentColor.opacity(0.22) : .clear, in: RoundedRectangle(cornerRadius: 8))
+        .contentShape(Rectangle())
+        .onTapGesture { selected = h.path }
+    }
+
+    // MARK: detail
+
+    @ViewBuilder
+    private var detail: some View {
+        if let sel = selected {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(NotesStore.title(text, sel)).font(.title3.bold()).lineLimit(1)
+                            if dirty { Circle().fill(.orange).frame(width: 8, height: 8).help("Unsaved changes") }
+                        }
+                        Text(URL(fileURLWithPath: sel).lastPathComponent).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Picker("", selection: $mode) { ForEach(NoteMode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+                        .pickerStyle(.segmented).frame(width: 220).labelsHidden()
+                    Button("Save") { save(sel) }.disabled(!dirty).keyboardShortcut("s", modifiers: .command)
+                }.padding(Theme.page)
+                Divider()
+                switch mode {
+                case .preview: previewPane
+                case .edit: editorPane
+                case .split:
+                    HSplitView { editorPane.frame(minWidth: 240); previewPane.frame(minWidth: 240) }
+                }
+            }
+        } else {
+            VStack(spacing: 10) {
+                Image(systemName: "doc.text.magnifyingglass").font(.system(size: 44)).foregroundStyle(.tertiary)
+                Text("Select a note").foregroundStyle(.secondary)
+                Text("⌘K to search everything").font(.caption).foregroundStyle(.tertiary)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var previewPane: some View {
+        ScrollView {
+            MarkdownView(source: text)
+                .frame(maxWidth: Theme.readingWidth, alignment: .leading)
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private var editorPane: some View {
+        TextEditor(text: $text)
+            .font(.system(size: 13, design: .monospaced))
+            .scrollContentBackground(.hidden)
+            .padding(12)
+            .background(Theme.card)
+    }
+
+    // MARK: actions
+
     private func load(_ path: String?) {
         guard let path else { return }
         text = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
-        dirty = false
-        DispatchQueue.main.async { dirty = false }
+        saved = text
     }
 
     private func save(_ path: String) {
         try? text.write(toFile: path, atomically: true, encoding: .utf8)
-        dirty = false
+        saved = text
         notes.scan()
-    }
-
-    private func markdown(_ s: String) -> AttributedString {
-        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
     }
 
     private func ensureFolder() -> Bool {
@@ -128,7 +187,7 @@ struct NotesView: View {
         alert.addButton(withTitle: "Create")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        if let path = notes.createNote(named: field.stringValue) { query = ""; selected = path }
+        if let path = notes.createNote(named: field.stringValue) { query = ""; selected = path; mode = .edit }
     }
 
     private func importMD() {
@@ -145,7 +204,7 @@ struct NotesView: View {
         let p = NSOpenPanel()
         p.canChooseDirectories = true
         p.canChooseFiles = false
-        p.message = "Choose the NOTES FOLDER to index (to add a file, use the Import button instead)"
+        p.message = "Choose the NOTES FOLDER to index (to add a file, use Import instead)"
         p.prompt = "Use this folder"
         if p.runModal() == .OK, let u = p.url { notes.setFolder(u.path) }
     }

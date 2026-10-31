@@ -32,7 +32,7 @@ struct ConnectionsView: View {
                     Spacer()
                 }.padding(8)
             }
-            .frame(minWidth: 300, idealWidth: 340)
+            .frame(minWidth: Theme.listWidth, idealWidth: Theme.listWidth, maxWidth: Theme.listWidth + 80)
 
             if let id = app.selectedProfile, let p = cm.profiles.first(where: { $0.id == id }) {
                 ProfileDetail(p: p, onEdit: { editing = p })
@@ -103,7 +103,7 @@ struct ProfileDetail: View {
             TextField("Search logs", text: $filter).textFieldStyle(.roundedBorder)
             LogView(text: filtered)
         }
-        .padding()
+        .padding(Theme.page)
         .sheet(isPresented: $askPassword) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Re-auth: \(p.name)").font(.headline)
