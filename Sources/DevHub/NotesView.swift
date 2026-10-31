@@ -23,8 +23,9 @@ struct NotesView: View {
                 }.padding(8)
                 if notes.folder.isEmpty {
                     VStack(spacing: 8) {
-                        Text("Choose a notes folder first").foregroundStyle(.secondary)
-                        Button("Choose folder…") { pickFolder() }
+                        Text("No notes yet").foregroundStyle(.secondary)
+                        Button("Import .md files…") { importMD() }
+                        Button("Or index an existing folder…") { pickFolder() }
                     }.frame(maxHeight: .infinity)
                 } else {
                     List(hits, selection: $selected) { h in
@@ -108,8 +109,13 @@ struct NotesView: View {
     }
 
     private func ensureFolder() -> Bool {
-        if notes.folder.isEmpty { pickFolder() }
-        return !notes.folder.isEmpty
+        if notes.folder.isEmpty {
+            // default notes folder so Import / New note work without a separate setup step
+            let d = Store.dir.appendingPathComponent("Notes")
+            try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+            notes.setFolder(d.path)
+        }
+        return true
     }
 
     private func newNote() {
@@ -139,6 +145,8 @@ struct NotesView: View {
         let p = NSOpenPanel()
         p.canChooseDirectories = true
         p.canChooseFiles = false
+        p.message = "Choose the NOTES FOLDER to index (to add a file, use the Import button instead)"
+        p.prompt = "Use this folder"
         if p.runModal() == .OK, let u = p.url { notes.setFolder(u.path) }
     }
 }
