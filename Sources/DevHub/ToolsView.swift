@@ -24,12 +24,13 @@ struct ToolsView: View {
     }
 
     var body: some View {
-        if [.password, .uuid, .diff].contains(kind) {
+        if [.password, .uuid, .diff, .time].contains(kind) {
             VStack(alignment: .leading) {
                 toolPicker
                 switch kind {
                 case .password: PasswordGenView()
                 case .uuid: IDGenView()
+                case .time: TimeToolView()
                 default: DiffView()
                 }
             }.padding()
@@ -130,7 +131,7 @@ struct ToolsView: View {
         return out
     }
 
-    static func time(_ s: String) -> String {
+    static func time(_ s: String, inputTZ: TimeZone = TimeZone(secondsFromGMT: 7 * 3600)!) -> String {
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         let tz7 = TimeZone(secondsFromGMT: 7 * 3600)!
         func fmt(_ d: Date, _ tz: TimeZone, _ suffix: String) -> String {
@@ -155,6 +156,11 @@ struct ToolsView: View {
         if let n = Double(t) {
             let isMs = abs(n) >= 1e11
             return "Input read as \(isMs ? "milliseconds" : "seconds")\n" + report(Date(timeIntervalSince1970: isMs ? n / 1000 : n))
+        }
+        for pat in ["dd-MM-yyyy HH:mm:ss", "dd-MM-yyyy HH:mm", "dd-MM-yyyy", "dd/MM/yyyy HH:mm:ss", "dd/MM/yyyy HH:mm", "dd/MM/yyyy", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd"] {
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX"); df.timeZone = inputTZ; df.dateFormat = pat; df.isLenient = false
+            if let d = df.date(from: t) { return report(d) }
         }
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -283,5 +289,60 @@ struct PasswordGenView: View {
             chars.shuffle()
             return String(chars)
         }
+    }
+}
+
+
+struct TimeToolView: View {
+    @State private var date = Date()
+    @State private var zone = "GMT+7"
+    @State private var text = ""
+    private let zones = ["GMT+7", "UTC", "Local"]
+
+    var tz: TimeZone {
+        switch zone {
+        case "UTC": return TimeZone(identifier: "UTC")!
+        case "Local": return .current
+        default: return TimeZone(secondsFromGMT: 7 * 3600)!
+        }
+    }
+
+    var result: String {
+        if !text.trimmingCharacters(in: .whitespaces).isEmpty { return ToolsView.time(text, inputTZ: tz) }
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = .current
+        let c = cal.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        var c2 = Calendar(identifier: .gregorian); c2.timeZone = tz
+        return ToolsView.time(String(c2.date(from: c)!.timeIntervalSince1970), inputTZ: tz)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                DatePicker("Date & time", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden().onChange(of: date) { _, _ in text = "" }
+                Picker("Zone", selection: $zone) { ForEach(zones, id: \.self) { Text($0) } }.pickerStyle(.segmented).frame(width: 220)
+                Button("Now") { date = Date(); text = "" }
+            }
+            TextField("Or type: 31-10-2026 14:30:00 · 2026-10-31 · epoch s/ms · ISO-8601", text: $text).textFieldStyle(.roundedBorder)
+            Text("Typed dates (dd-MM-yyyy, dd/MM/yyyy, yyyy-MM-dd) are read in the selected zone. Picker values are read in that zone too.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Text("Result").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Copy seconds") { copy(1) }
+                Button("Copy ms") { copy(1000) }
+            }
+            ScrollView {
+                Text(result).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }.padding(6).background(.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+        }
+    }
+
+    func copy(_ mult: Int) {
+        let key = mult == 1 ? "Unix (s):" : "Unix (ms):"
+        guard let line = result.split(separator: "\n").first(where: { $0.hasPrefix(key) }) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(line.replacingOccurrences(of: key, with: "").trimmingCharacters(in: .whitespaces), forType: .string)
     }
 }

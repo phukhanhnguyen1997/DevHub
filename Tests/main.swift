@@ -68,6 +68,7 @@ func objectId() {
 }
 
 func timestamp() {
+    check(ToolsView.time("01-11-2026 00:00:00").contains("Unix (s):   1793466000"), "friendly date gmt+7")
     let out = ToolsView.time("1793350853000")
     check(out.contains("Unix (ms):  1793350853000"), "timestamp ms")
     check(out.contains("+07:00"), "timestamp gmt+7")
