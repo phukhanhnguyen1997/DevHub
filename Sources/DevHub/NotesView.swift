@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-enum NoteMode: String, CaseIterable { case preview = "Preview", edit = "Edit", split = "Split" }
+enum NoteMode: String, CaseIterable { case preview = "Preview", edit = "Edit", raw = "Raw", split = "Split" }
 
 struct NotesView: View {
     @EnvironmentObject var notes: NotesStore
@@ -116,15 +116,16 @@ struct NotesView: View {
                     }
                     Spacer()
                     Picker("", selection: $mode) { ForEach(NoteMode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
-                        .pickerStyle(.segmented).frame(width: 220).labelsHidden()
+                        .pickerStyle(.segmented).frame(width: 290).labelsHidden()
                     Button("Save") { save(sel) }.disabled(!dirty).keyboardShortcut("s", modifiers: .command)
                 }.padding(Theme.page)
                 Divider()
                 switch mode {
                 case .preview: previewPane
-                case .edit: editorPane
+                case .edit: BlockEditor(text: $text).id(sel)
+                case .raw: editorPane
                 case .split:
-                    HSplitView { editorPane.frame(minWidth: 240); previewPane.frame(minWidth: 240) }
+                    HSplitView { BlockEditor(text: $text).id(sel).frame(minWidth: 280); previewPane.frame(minWidth: 280) }
                 }
             }
         } else {
