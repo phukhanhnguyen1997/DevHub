@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 var failures = 0
 func check(_ ok: Bool, _ name: String) {
@@ -73,6 +74,29 @@ func ptyPassword() {
     check(w.code != 0, "pty without password fails")
 }
 
+func liveEditor() {
+    _ = NSApplication.shared
+    func make(_ s: String) -> MDTextView {
+        let tv = MDTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        tv.string = s
+        tv.setSelectedRange(NSRange(location: (s as NSString).length, length: 0))
+        return tv
+    }
+    var tv = make("- a"); tv.insertNewline(nil)
+    check(tv.string == "- a\n- ", "bullet continues: \(tv.string.debugDescription)")
+    tv = make("- a\n- "); tv.insertNewline(nil)
+    check(tv.string == "- a\n", "empty bullet exits: \(tv.string.debugDescription)")
+    tv = make("1. x"); tv.insertNewline(nil)
+    check(tv.string == "1. x\n2. ", "numbered continues: \(tv.string.debugDescription)")
+    tv = make("- [x] done"); tv.insertNewline(nil)
+    check(tv.string == "- [x] done\n- [ ] ", "todo continues: \(tv.string.debugDescription)")
+    tv = make("plain"); tv.insertNewline(nil)
+    check(tv.string == "plain\n", "plain newline")
+    tv = make("# Title\n**b** `c`"); tv.restyle()
+    let f = tv.textStorage!.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+    check((f?.pointSize ?? 0) > 25, "heading is large")
+}
+
 func sqlFormat() {
     let out = SQLFormat.format("select a,b from t where x=1 and y=2 order by a")
     check(out == "SELECT a,\n  b\nFROM t\nWHERE x = 1\n  AND y = 2\nORDER BY a", "sql format: \(out.debugDescription)")
@@ -106,6 +130,6 @@ func timestamp() {
 }
 
 segCodecRoundTrip(); markdownBlocks(); readOnlyGuard(); diffMarksChangedLine(); cron()
-cronNL(); ptyPassword(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
+cronNL(); ptyPassword(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

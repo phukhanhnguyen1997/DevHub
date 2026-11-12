@@ -69,14 +69,14 @@ struct BlockEditor: View {
                     if seg.isCode {
                         CodeEditorCard(seg: $seg) { segs.removeAll { $0.id == seg.id } }
                     } else {
-                        GrowingEditor(text: $seg.text, font: .system(size: 14.5))
+                        LiveTextEditor(text: $seg.text)
                     }
                 }
                 HStack {
                     Button { segs.append(Seg(isCode: false, text: "")) } label: { Label("Text", systemImage: "plus") }
                     Button { segs.append(Seg(isCode: true, text: "")) } label: { Label("Code block", systemImage: "plus") }
                     Spacer()
-                    Text("Tip: type ``` … ``` to turn text into a code block").font(.caption).foregroundStyle(.tertiary)
+                    Text("Type / for blocks · ⌘B bold · ⌘I italic · ⌘E code").font(.caption).foregroundStyle(.tertiary)
                 }.buttonStyle(.borderless).padding(.top, 6)
             }
             .frame(maxWidth: Theme.readingWidth)

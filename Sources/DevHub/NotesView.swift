@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-enum NoteMode: String, CaseIterable { case preview = "Preview", edit = "Edit", raw = "Raw", split = "Split" }
+enum NoteMode: String, CaseIterable { case edit = "Page", preview = "Preview", raw = "Markdown", split = "Split" }
 
 struct NotesView: View {
     @EnvironmentObject var notes: NotesStore
@@ -14,7 +14,9 @@ struct NotesView: View {
     @State private var selected: String?
     @State private var text = ""
     @State private var saved = ""
-    @State private var mode: NoteMode = .preview
+    @State private var mode: NoteMode = .edit
+    @State private var lastSaved: Date?
+    private let autosave = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var hits: [NoteHit] {
         var h = notes.search(query)
@@ -29,7 +31,17 @@ struct NotesView: View {
             sidebar.frame(minWidth: Theme.listWidth, idealWidth: Theme.listWidth, maxWidth: Theme.listWidth + 80)
             detail.frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .onChange(of: selected) { _, new in load(new) }
+        .onChange(of: selected) { old, new in
+            if dirty, let old { save(old) }
+            load(new)
+        }
+        .onReceive(autosave) { _ in
+            if dirty, let s = selected { save(s) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            if dirty, let s = selected { save(s) }
+        }
+        .onDisappear { if dirty, let s = selected { save(s) } }
         .onChange(of: app.openNote) { _, new in
             if let new { selected = new; app.openNote = nil }
         }
@@ -135,7 +147,7 @@ struct NotesView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(NotesStore.title(text, sel)).font(.title3.bold()).lineLimit(1)
-                            if dirty { Circle().fill(.orange).frame(width: 8, height: 8).help("Unsaved changes") }
+
                         }
                         Text(URL(fileURLWithPath: sel).lastPathComponent).font(.caption).foregroundStyle(.secondary)
                     }
@@ -145,7 +157,11 @@ struct NotesView: View {
                     outlineMenu
                     Picker("", selection: $mode) { ForEach(NoteMode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                         .pickerStyle(.segmented).frame(width: 290).labelsHidden()
-                    Button("Save") { save(sel) }.disabled(!dirty).keyboardShortcut("s", modifiers: .command)
+                    HStack(spacing: 4) {
+                        Image(systemName: dirty ? "circle.dotted" : "checkmark.circle.fill").foregroundStyle(dirty ? .orange : .green)
+                        Text(dirty ? "Editing… autosave in ≤5s" : (lastSaved.map { "Saved \($0.formatted(date: .omitted, time: .standard))" } ?? "Saved"))
+                    }.font(.caption).foregroundStyle(.secondary)
+                    Button("Save") { save(sel) }.keyboardShortcut("s", modifiers: .command).opacity(0).frame(width: 0)
                 }.padding(Theme.page)
                 Divider()
                 switch mode {
@@ -247,6 +263,7 @@ struct NotesView: View {
     private func save(_ path: String) {
         try? text.write(toFile: path, atomically: true, encoding: .utf8)
         saved = text
+        lastSaved = Date()
         notes.scan()
     }
 

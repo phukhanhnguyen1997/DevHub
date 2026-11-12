@@ -2,6 +2,10 @@
 
 Newest first. Hashes refer to git commits.
 
+- Notes: Notion-style "Page" editor (live markdown styling, `/` block menu, list continuation, clickable to-dos, ⌘B/⌘I/⌘E) and 5s autosave (also on note switch / app deactivate).
+- Cron: English → cron expression mode (rule-based, e.g. "every weekday at 8:30am").
+- Connections: auto re-auth. Saved Google work password (Keychain) answers tunnel password prompts and `gcloud` reauth prompts; expired login auto-opens `gcloud auth login` (browser click still needed) and restarts blocked tunnels.
+
 - `b13aa6d` Timestamp tool: date picker, friendly date input (dd-MM-yyyy, yyyy-MM-dd) with zone, auto epoch conversion.
 - `1f2ad09` Clipboard history, global hotkey ⌃⌥K, palette quick actions, Cron/SQL/CSV/TS tools, session restore, wake/network recovery, gcloud/ADC expiry checks, import/export, tags/pin/backlinks.
 - `4d9c548` Block-based note editor: code blocks shown as cards in Edit mode.
