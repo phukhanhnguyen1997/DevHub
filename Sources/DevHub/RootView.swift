@@ -23,6 +23,7 @@ final class AppState: ObservableObject {
     @Published var showPalette = false
     @Published var selectedProfile: UUID?
     @Published var openNote: String?
+    @Published var openNoteQuery: String?
 }
 
 func statusColor(_ s: RunState) -> Color {

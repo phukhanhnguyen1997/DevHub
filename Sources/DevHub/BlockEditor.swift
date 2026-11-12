@@ -58,18 +58,38 @@ struct GrowingEditor: View {
     }
 }
 
+struct FindRequest: Equatable {
+    let term: String
+    let token = UUID()
+}
+
 struct BlockEditor: View {
     @Binding var text: String
+    var find: FindRequest?
     @State private var segs: [Seg] = []
+    @State private var hit: (seg: UUID, range: NSRange, token: UUID)?
+
+    private func locate(_ req: FindRequest) {
+        let words = req.term.split(separator: " ").map(String.init)
+        for t in [req.term] + words {
+            for s in segs {
+                let r = (s.text as NSString).range(of: t, options: [.caseInsensitive, .diacriticInsensitive])
+                if r.location != NSNotFound { hit = (s.id, r, req.token); return }
+            }
+        }
+    }
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach($segs) { $seg in
                     if seg.isCode {
                         CodeEditorCard(seg: $seg) { segs.removeAll { $0.id == seg.id } }
                     } else {
-                        LiveTextEditor(text: $seg.text)
+                        LiveTextEditor(text: $seg.text,
+                                       highlight: hit?.seg == seg.id ? hit?.range : nil,
+                                       highlightToken: hit?.token)
                     }
                 }
                 HStack {
@@ -83,7 +103,15 @@ struct BlockEditor: View {
             .padding(24)
             .frame(maxWidth: .infinity)
         }
-        .onAppear { segs = SegCodec.parse(text) }
+        .onAppear {
+            segs = SegCodec.parse(text)
+            if let f = find { locate(f) }
+        }
+        .onChange(of: find) { _, f in if let f { locate(f) } }
+        .onChange(of: hit?.token) { _, _ in
+            guard let h = hit, segs.first(where: { $0.id == h.seg })?.isCode == true else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { withAnimation { proxy.scrollTo(h.seg, anchor: .center) } }
+        }
         .onChange(of: text) { _, new in
             if SegCodec.serialize(segs) != new { segs = SegCodec.parse(new) }
         }
@@ -94,6 +122,7 @@ struct BlockEditor: View {
             }
             let s = SegCodec.serialize(new)
             if s != text { text = s }
+        }
         }
     }
 }

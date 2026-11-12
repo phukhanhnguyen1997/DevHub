@@ -2,6 +2,8 @@
 
 Newest first. Hashes refer to git commits.
 
+- Cmd+K: opening a note from search scrolls to the first match and flashes it.
+
 - Notes: Notion-style "Page" editor (live markdown styling, `/` block menu, list continuation, clickable to-dos, ⌘B/⌘I/⌘E) and 5s autosave (also on note switch / app deactivate).
 - Cron: English → cron expression mode (rule-based, e.g. "every weekday at 8:30am").
 - Connections: auto re-auth. Saved Google work password (Keychain) answers tunnel password prompts and `gcloud` reauth prompts; expired login auto-opens `gcloud auth login` (browser click still needed) and restarts blocked tunnels.

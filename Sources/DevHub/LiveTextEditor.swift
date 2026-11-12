@@ -5,6 +5,8 @@ import AppKit
 struct LiveTextEditor: NSViewRepresentable {
     @Binding var text: String
     var size: CGFloat = 15.5
+    var highlight: NSRange?
+    var highlightToken: UUID?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -35,6 +37,14 @@ struct LiveTextEditor: NSViewRepresentable {
             tv.string = text
             tv.restyle()
         }
+        if let r = highlight, let tok = highlightToken, context.coordinator.shown != tok, NSMaxRange(r) <= tv.string.utf16.count {
+            context.coordinator.shown = tok
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                tv.setSelectedRange(r)
+                tv.scrollRangeToVisible(r)
+                tv.showFindIndicator(for: r)
+            }
+        }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView tv: MDTextView, context: Context) -> CGSize? {
@@ -47,6 +57,7 @@ struct LiveTextEditor: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: LiveTextEditor
+        var shown: UUID?
         init(_ p: LiveTextEditor) { parent = p }
 
         func textDidChange(_ n: Notification) {

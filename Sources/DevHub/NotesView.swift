@@ -16,6 +16,7 @@ struct NotesView: View {
     @State private var saved = ""
     @State private var mode: NoteMode = .edit
     @State private var lastSaved: Date?
+    @State private var find: FindRequest?
     private let autosave = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var hits: [NoteHit] {
@@ -43,11 +44,23 @@ struct NotesView: View {
         }
         .onDisappear { if dirty, let s = selected { save(s) } }
         .onChange(of: app.openNote) { _, new in
-            if let new { selected = new; app.openNote = nil }
+            if let new { open(new) }
         }
         .onAppear {
-            if let n = app.openNote { selected = n; app.openNote = nil }
+            if let n = app.openNote { open(n) }
         }
+    }
+
+    private func open(_ path: String) {
+        let term = app.openNoteQuery?.trimmingCharacters(in: .whitespaces) ?? ""
+        app.openNote = nil
+        app.openNoteQuery = nil
+        if selected != path { selected = path }
+        else if dirty { save(path) }
+        if term.isEmpty { return }
+        mode = .edit
+        load(path)
+        DispatchQueue.main.async { find = FindRequest(term: term) }
     }
 
     // MARK: sidebar
@@ -166,7 +179,7 @@ struct NotesView: View {
                 Divider()
                 switch mode {
                 case .preview: previewPane
-                case .edit: BlockEditor(text: $text).id(sel)
+                case .edit: BlockEditor(text: $text, find: find).id(sel)
                 case .raw: editorPane
                 case .split:
                     HSplitView { BlockEditor(text: $text).id(sel).frame(minWidth: 280); previewPane.frame(minWidth: 280) }
@@ -371,7 +384,7 @@ struct PaletteView: View {
         if !q.isEmpty {
             noteItems = notes.search(q).prefix(8).map { h in
                 Item(title: h.title, subtitle: h.snippet.isEmpty ? "Note" : h.snippet, icon: "note.text") {
-                    app.tab = .notes; app.openNote = h.path
+                    app.tab = .notes; app.openNoteQuery = q; app.openNote = h.path
                 }
             }
         }
