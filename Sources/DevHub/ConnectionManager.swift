@@ -38,7 +38,7 @@ final class ConnectionManager: ObservableObject {
     private var checking = false
     private var lastBrowserLogin: Date = .distantPast
 
-    var hasGooglePassword: Bool { Vault.get(Self.googlePwKey) != nil }
+    var hasGooglePassword: Bool { Vault.exists(Self.googlePwKey) }
 
     init() {
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -114,7 +114,8 @@ final class ConnectionManager: ObservableObject {
         guard needGcloud || needADC else { gcloudAuthExpired = false; adcExpired = false; return }
         guard !checking else { return }
         checking = true
-        let pw = autoReauth ? Vault.get(Self.googlePwKey) : nil
+        let auto = autoReauth
+        let pw: () -> String? = { auto ? Vault.get(ConnectionManager.googlePwKey) : nil }
         DispatchQueue.global().async {
             // Run through a PTY so gcloud's "Reauthentication required" password prompt can be answered.
             let g = needGcloud ? Self.ptyRun("gcloud auth print-access-token >/dev/null", password: pw, timeout: 45).code != 0 : false
@@ -139,7 +140,8 @@ final class ConnectionManager: ObservableObject {
     func googleLogin(adc: Bool) {
         let cmd = adc ? "gcloud auth application-default login" : "gcloud auth login"
         googleStatus = "Waiting for browser sign-in…"
-        let pw = autoReauth ? Vault.get(Self.googlePwKey) : nil
+        let auto = autoReauth
+        let pw: () -> String? = { auto ? Vault.get(ConnectionManager.googlePwKey) : nil }
         DispatchQueue.global().async {
             _ = Self.ptyRun(cmd, password: pw, timeout: 300)
             Task { @MainActor in
@@ -167,7 +169,7 @@ final class ConnectionManager: ObservableObject {
     }
 
     /// Runs a command on a PTY and answers password prompts (max 2 attempts, to avoid locking the account).
-    nonisolated static func ptyRun(_ cmd: String, password: String?, timeout: TimeInterval) -> (out: String, code: Int32) {
+    nonisolated static func ptyRun(_ cmd: String, password: @escaping () -> String?, timeout: TimeInterval) -> (out: String, code: Int32) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/script")
         proc.arguments = ["-q", "/dev/null", "/bin/zsh", "-lc", cmd]
@@ -183,9 +185,9 @@ final class ConnectionManager: ObservableObject {
             box.lock.lock(); defer { box.lock.unlock() }
             box.buf += s
             let text = s.replacingOccurrences(of: "\u{1B}\\[[0-9;?]*[A-Za-z]", with: "", options: .regularExpression)
-            if let password, box.sent < 2, text.range(of: "(?i)password|reauthenticat", options: .regularExpression) != nil {
+            if box.sent < 2, text.range(of: "(?i)password|reauthenticat", options: .regularExpression) != nil, let pw = password() {
                 box.sent += 1
-                writer.write(Data((password + "\n").utf8))
+                writer.write(Data((pw + "\n").utf8))
             }
         }
         do { try proc.run() } catch { return ("failed: \(error)", -1) }
@@ -327,7 +329,9 @@ final class ConnectionManager: ObservableObject {
         return Vault.get(Self.googlePwKey)
     }
 
-    func hasStoredSecret(_ p: Profile) -> Bool { storedPassword(p) != nil }
+    func hasStoredSecret(_ p: Profile) -> Bool {
+        (!p.reauthSecret.isEmpty && Vault.exists(p.reauthSecret)) || Vault.exists(Self.googlePwKey)
+    }
 
     // MARK: internals
 

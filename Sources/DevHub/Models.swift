@@ -74,8 +74,26 @@ enum Store {
 enum Vault {
     static let service = "DevHub"
 
+    // Reading item data triggers a Keychain password prompt for ad-hoc signed apps, so read once and cache.
+    nonisolated(unsafe) private static var cache: [String: String] = [:]
+    private static let lock = NSLock()
+
+    /// Presence check that reads attributes only (never prompts).
+    static func exists(_ name: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if cache[name] != nil { return true }
+        let q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: name,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        return SecItemCopyMatching(q as CFDictionary, nil) == errSecSuccess
+    }
+
     static func set(_ name: String, _ value: String) {
-        delete(name)
+        lock.lock(); cache[name] = value; lock.unlock()
+        delete(name, keepCache: true)
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -86,6 +104,9 @@ enum Vault {
     }
 
     static func get(_ name: String) -> String? {
+        lock.lock()
+        if let v = cache[name] { lock.unlock(); return v }
+        lock.unlock()
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -95,10 +116,13 @@ enum Vault {
         ]
         var out: AnyObject?
         guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
-        return String(data: d, encoding: .utf8)
+        let v = String(data: d, encoding: .utf8)
+        if let v { lock.lock(); cache[name] = v; lock.unlock() }
+        return v
     }
 
-    static func delete(_ name: String) {
+    static func delete(_ name: String, keepCache: Bool = false) {
+        if !keepCache { lock.lock(); cache[name] = nil; lock.unlock() }
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

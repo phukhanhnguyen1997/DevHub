@@ -68,9 +68,9 @@ func cronNL() {
 }
 
 func ptyPassword() {
-    let r = ConnectionManager.ptyRun("printf 'Password: '; read -s x; [ \"$x\" = secret ]", password: "secret", timeout: 10)
+    let r = ConnectionManager.ptyRun("printf 'Password: '; read -s x; [ \"$x\" = secret ]", password: { "secret" }, timeout: 10)
     check(r.code == 0, "pty password injected: \(r.out)")
-    let w = ConnectionManager.ptyRun("printf 'Password: '; read -s x; [ \"$x\" = secret ]", password: nil, timeout: 2)
+    let w = ConnectionManager.ptyRun("printf 'Password: '; read -s x; [ \"$x\" = secret ]", password: { nil }, timeout: 2)
     check(w.code != 0, "pty without password fails")
 }
 
