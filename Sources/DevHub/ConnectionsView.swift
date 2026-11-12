@@ -6,6 +6,7 @@ struct ConnectionsView: View {
     @EnvironmentObject var cm: ConnectionManager
     @EnvironmentObject var app: AppState
     @State private var editing: Profile?
+    @State private var showAuth = false
 
     var groups: [String] { Array(Set(cm.profiles.map(\.group))).sorted() }
 
@@ -34,6 +35,8 @@ struct ConnectionsView: View {
                 HStack {
                     Button { editing = Profile() } label: { Label("Add profile", systemImage: "plus") }
                     Spacer()
+                    Button { showAuth = true } label: { Image(systemName: cm.hasGooglePassword ? "lock.shield.fill" : "lock.shield") }
+                        .help("Auto re-auth (Google work account)")
                     Button("Import") { importProfiles() }
                     Button("Export") { exportProfiles() }
                 }.padding(8)
@@ -49,6 +52,7 @@ struct ConnectionsView: View {
             }
         }
         .sheet(item: $editing) { p in ProfileEditor(profile: p) }
+        .sheet(isPresented: $showAuth) { GoogleAuthSettings() }
     }
 
     private func exportProfiles() {
@@ -83,6 +87,7 @@ struct AuthBanner: View {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
             Text(msg).font(.callout)
             Spacer()
+            if !cm.googleStatus.isEmpty { Text(cm.googleStatus).font(.caption).foregroundStyle(.secondary) }
             Button("Run `\(cmd)`") { cm.googleLogin(adc: adc) }.buttonStyle(.borderedProminent).tint(.red)
         }
         .padding(.horizontal, Theme.page).padding(.vertical, 8)
@@ -268,5 +273,38 @@ enum ConnInfo {
     static func copy(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
+    }
+}
+
+
+struct GoogleAuthSettings: View {
+    @EnvironmentObject var cm: ConnectionManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var password = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Auto re-authentication").font(.title3).bold()
+            Text("Saved in macOS Keychain (service DevHub). Used for any profile without its own re-auth secret.")
+                .font(.caption).foregroundStyle(.secondary)
+            SecureField(cm.hasGooglePassword ? "Password saved - type to replace" : "Google work account password", text: $password)
+                .textFieldStyle(.roundedBorder)
+            Toggle("Auto-answer password prompts (tunnels + gcloud checks)", isOn: $cm.autoReauth)
+            Toggle("Auto-open `gcloud auth login` when login/ADC expires", isOn: $cm.autoGoogleLogin)
+            Text("""
+            • Password prompts ("Reauthentication required") are answered automatically, max 2 tries per 10 min to avoid locking the account.
+            • An expired login (refresh token revoked) needs the browser: DevHub opens it for you, you only click Allow. Tunnels restart on their own afterwards.
+            """).font(.caption).foregroundStyle(.secondary)
+            HStack {
+                if cm.hasGooglePassword { Button("Remove password", role: .destructive) { Vault.delete(ConnectionManager.googlePwKey); dismiss() } }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Save") {
+                    if !password.isEmpty { Vault.set(ConnectionManager.googlePwKey, password) }
+                    cm.objectWillChange.send()
+                    dismiss()
+                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+            }
+        }.padding(20).frame(width: 460)
     }
 }

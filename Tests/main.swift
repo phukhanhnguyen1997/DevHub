@@ -42,6 +42,37 @@ func cron() {
     check(runs.count == 2 && cal.component(.day, from: runs[1]) == 2, "cron second day")
 }
 
+func cronNL() {
+    let cases: [(String, String)] = [
+        ("every 5 minutes", "*/5 * * * *"),
+        ("every minute", "* * * * *"),
+        ("every hour", "0 * * * *"),
+        ("every 2 hours", "0 */2 * * *"),
+        ("every day at 9am", "0 9 * * *"),
+        ("daily at midnight", "0 0 * * *"),
+        ("every weekday at 8:30am", "30 8 * * 1-5"),
+        ("every monday and friday at 2pm", "0 14 * * 1,5"),
+        ("every monday to friday at 17:00", "0 17 * * 1-5"),
+        ("1st of every month at midnight", "0 0 1 * *"),
+        ("every 15 minutes between 9am and 5pm on weekdays", "*/15 9-17 * * 1-5"),
+        ("every sunday at 3:30 pm in june", "30 15 * 6 0"),
+        ("weekly", "0 0 * * 0"),
+        ("every 3 days at noon", "0 12 */3 * *"),
+    ]
+    for (text, want) in cases {
+        let got = CronNL.parse(text)?.expr ?? "nil"
+        check(got == want, "cronNL '\(text)' -> \(got), want \(want)")
+    }
+    check(CronNL.parse("blah blah") == nil, "cronNL rejects gibberish")
+}
+
+func ptyPassword() {
+    let r = ConnectionManager.ptyRun("printf 'Password: '; read -s x; [ \"$x\" = secret ]", password: "secret", timeout: 10)
+    check(r.code == 0, "pty password injected: \(r.out)")
+    let w = ConnectionManager.ptyRun("printf 'Password: '; read -s x; [ \"$x\" = secret ]", password: nil, timeout: 2)
+    check(w.code != 0, "pty without password fails")
+}
+
 func sqlFormat() {
     let out = SQLFormat.format("select a,b from t where x=1 and y=2 order by a")
     check(out == "SELECT a,\n  b\nFROM t\nWHERE x = 1\n  AND y = 2\nORDER BY a", "sql format: \(out.debugDescription)")
@@ -75,6 +106,6 @@ func timestamp() {
 }
 
 segCodecRoundTrip(); markdownBlocks(); readOnlyGuard(); diffMarksChangedLine(); cron()
-sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
+cronNL(); ptyPassword(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -12,6 +12,7 @@ struct ToolsView: View {
     @State private var input = ""
     @State private var extra = ""
     @State private var decode = false
+    @State private var cronMode = "Cron → English"
 
     var kind: ToolKind { app.toolKind }
 
@@ -48,13 +49,23 @@ struct ToolsView: View {
                     if csvMode.hasSuffix("INSERT") { TextField("Table name", text: $extra).textFieldStyle(.roundedBorder).frame(width: 160) }
                 }
                 if [.base64, .url].contains(kind) { Toggle("Decode", isOn: $decode).toggleStyle(.switch) }
+                if kind == .cron {
+                    Picker("", selection: $cronMode) { ForEach(["Cron → English", "English → Cron"], id: \.self) { Text($0) } }
+                        .pickerStyle(.segmented).frame(width: 300)
+                }
                 if kind == .regex { TextField("Regex pattern", text: $extra).textFieldStyle(.roundedBorder) }
             }
-            Text(kind == .time ? "Epoch (seconds or ms) or ISO-8601 - empty = now" : kind == .cron ? "Cron expression (5 fields)" : "Input").font(.caption).foregroundStyle(.secondary)
+            Text(kind == .time ? "Epoch (seconds or ms) or ISO-8601 - empty = now" : kind == .cron ? (cronMode == "Cron → English" ? "Cron expression (5 fields)" : "Describe the schedule in English, e.g. every weekday at 8:30am")  : "Input").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $input).font(.system(.body, design: .monospaced)).frame(minHeight: 140).border(.gray.opacity(0.4))
             HStack {
                 Text("Output").font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                if kind == .cron && cronMode == "English → Cron", let r = CronNL.parse(input) {
+                    Button("Copy expression") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(r.expr, forType: .string)
+                    }
+                }
                 Button("Copy") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(output, forType: .string)
@@ -89,7 +100,7 @@ struct ToolsView: View {
             SHA512: \(SHA512.hash(data: d).hex)
             """
         case .password: return ""
-        case .cron: return Cron.report(input)
+        case .cron: return cronMode == "Cron → English" ? Cron.report(input) : CronNL.report(input)
         case .sql: return SQLFormat.format(input)
         case .ts: return TSGen.generate(input)
         case .csv:

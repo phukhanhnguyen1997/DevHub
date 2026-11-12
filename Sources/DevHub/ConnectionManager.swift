@@ -26,6 +26,20 @@ final class ConnectionManager: ObservableObject {
         didSet { UserDefaults.standard.set(restoreLast, forKey: "restoreLast") }
     }
 
+    static let googlePwKey = "google-work-password"
+    @Published var autoReauth: Bool = UserDefaults.standard.object(forKey: "autoReauth") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoReauth, forKey: "autoReauth") }
+    }
+    @Published var autoGoogleLogin: Bool = UserDefaults.standard.object(forKey: "autoGoogleLogin") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoGoogleLogin, forKey: "autoGoogleLogin") }
+    }
+    @Published var googleStatus = ""
+    private var autoSends: [UUID: [Date]] = [:]
+    private var checking = false
+    private var lastBrowserLogin: Date = .distantPast
+
+    var hasGooglePassword: Bool { Vault.get(Self.googlePwKey) != nil }
+
     init() {
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.healthCheck() }
@@ -98,24 +112,90 @@ final class ConnectionManager: ObservableObject {
         let needGcloud = profiles.contains { usesGcloud($0) && procs[$0.id] != nil }
         let needADC = profiles.contains { usesADC($0) && procs[$0.id] != nil }
         guard needGcloud || needADC else { gcloudAuthExpired = false; adcExpired = false; return }
+        guard !checking else { return }
+        checking = true
+        let pw = autoReauth ? Vault.get(Self.googlePwKey) : nil
         DispatchQueue.global().async {
-            let g = needGcloud ? shell("gcloud auth print-access-token >/dev/null 2>&1", timeout: 20).code != 0 : false
-            let a = needADC ? shell("gcloud auth application-default print-access-token >/dev/null 2>&1", timeout: 20).code != 0 : false
+            // Run through a PTY so gcloud's "Reauthentication required" password prompt can be answered.
+            let g = needGcloud ? Self.ptyRun("gcloud auth print-access-token >/dev/null", password: pw, timeout: 45).code != 0 : false
+            let a = needADC ? Self.ptyRun("gcloud auth application-default print-access-token >/dev/null", password: pw, timeout: 45).code != 0 : false
             Task { @MainActor in
-                if g && !self.gcloudAuthExpired { Self.notify("gcloud login expired", "Run: gcloud auth login") }
-                if a && !self.adcExpired { Self.notify("gcloud ADC expired", "Run: gcloud auth application-default login") }
+                self.checking = false
+                let recovered = (self.gcloudAuthExpired && !g) || (self.adcExpired && !a)
+                if g && !self.gcloudAuthExpired { Self.notify("gcloud login expired", self.autoGoogleLogin ? "Opening browser sign-in - approve it" : "Run: gcloud auth login") }
+                if a && !self.adcExpired { Self.notify("gcloud ADC expired", self.autoGoogleLogin ? "Opening browser sign-in - approve it" : "Run: gcloud auth application-default login") }
                 self.gcloudAuthExpired = g
                 self.adcExpired = a
+                if recovered { self.restartAuthBlocked() }
+                if self.autoGoogleLogin, (g || a), Date().timeIntervalSince(self.lastBrowserLogin) > 600 {
+                    self.lastBrowserLogin = Date()
+                    self.googleLogin(adc: !g && a)
+                }
             }
         }
     }
 
+    /// Browser-based login. The password prompt (if any) is answered automatically; the browser consent still needs one click.
     func googleLogin(adc: Bool) {
         let cmd = adc ? "gcloud auth application-default login" : "gcloud auth login"
+        googleStatus = "Waiting for browser sign-in…"
+        let pw = autoReauth ? Vault.get(Self.googlePwKey) : nil
         DispatchQueue.global().async {
-            _ = shell(cmd, timeout: 300)
-            Task { @MainActor in self.checkGoogleAuth() }
+            _ = Self.ptyRun(cmd, password: pw, timeout: 300)
+            Task { @MainActor in
+                self.googleStatus = ""
+                self.checkGoogleAuth()
+            }
         }
+    }
+
+    /// After Google auth is healthy again, bring back tunnels that died or waited for it.
+    private func restartAuthBlocked() {
+        for p in profiles where desired.contains(p.id) && (usesGcloud(p) || usesADC(p)) {
+            let s = state(p)
+            if s == .needsReauth || s == .crashed {
+                if procs[p.id] != nil { stop(p); desired.insert(p.id) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.start(p) }
+            }
+        }
+    }
+
+    private final class PTYBox: @unchecked Sendable {
+        var buf = ""
+        var sent = 0
+        let lock = NSLock()
+    }
+
+    /// Runs a command on a PTY and answers password prompts (max 2 attempts, to avoid locking the account).
+    nonisolated static func ptyRun(_ cmd: String, password: String?, timeout: TimeInterval) -> (out: String, code: Int32) {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/script")
+        proc.arguments = ["-q", "/dev/null", "/bin/zsh", "-lc", cmd]
+        let inPipe = Pipe(), outPipe = Pipe()
+        proc.standardInput = inPipe
+        proc.standardOutput = outPipe
+        proc.standardError = outPipe
+        let box = PTYBox()
+        let writer = inPipe.fileHandleForWriting
+        outPipe.fileHandleForReading.readabilityHandler = { h in
+            let d = h.availableData
+            guard !d.isEmpty, let s = String(data: d, encoding: .utf8) else { return }
+            box.lock.lock(); defer { box.lock.unlock() }
+            box.buf += s
+            let text = s.replacingOccurrences(of: "\u{1B}\\[[0-9;?]*[A-Za-z]", with: "", options: .regularExpression)
+            if let password, box.sent < 2, text.range(of: "(?i)password|reauthenticat", options: .regularExpression) != nil {
+                box.sent += 1
+                writer.write(Data((password + "\n").utf8))
+            }
+        }
+        do { try proc.run() } catch { return ("failed: \(error)", -1) }
+        let killer = DispatchWorkItem { if proc.isRunning { proc.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: killer)
+        proc.waitUntilExit()
+        killer.cancel()
+        outPipe.fileHandleForReading.readabilityHandler = nil
+        box.lock.lock(); defer { box.lock.unlock() }
+        return (box.buf, proc.terminationStatus)
     }
 
     // MARK: import / export
@@ -231,8 +311,7 @@ final class ConnectionManager: ObservableObject {
 
     /// Sends the password to the running prompt, or restarts the process if it already exited.
     func reauth(_ p: Profile, password: String? = nil) {
-        let pw = password ?? (p.reauthSecret.isEmpty ? nil : Vault.get(p.reauthSecret))
-        guard let pw else { return }
+        guard let pw = password ?? storedPassword(p) else { return }
         if procs[p.id] != nil, let h = inputs[p.id] {
             h.write(Data((pw + "\n").utf8))
             states[p.id] = .starting
@@ -242,7 +321,13 @@ final class ConnectionManager: ObservableObject {
         }
     }
 
-    func hasStoredSecret(_ p: Profile) -> Bool { !p.reauthSecret.isEmpty && Vault.get(p.reauthSecret) != nil }
+    /// Per-profile secret first, then the global Google work password.
+    func storedPassword(_ p: Profile) -> String? {
+        if !p.reauthSecret.isEmpty, let v = Vault.get(p.reauthSecret) { return v }
+        return Vault.get(Self.googlePwKey)
+    }
+
+    func hasStoredSecret(_ p: Profile) -> Bool { storedPassword(p) != nil }
 
     // MARK: internals
 
@@ -252,9 +337,25 @@ final class ConnectionManager: ObservableObject {
         let pats = patterns.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
         for pat in pats {
             if text.range(of: pat, options: [.regularExpression, .caseInsensitive]) != nil {
+                let p = profiles.first { $0.id == id }
+                let name = p?.name ?? "profile"
+                let passwordPrompt = text.range(of: "(?i)password|reauthenticat", options: .regularExpression) != nil
+                if autoReauth, passwordPrompt, let p, let pw = storedPassword(p) {
+                    let recent = (autoSends[id] ?? []).filter { Date().timeIntervalSince($0) < 600 }
+                    if recent.count < 2, procs[id] != nil, let h = inputs[id] {
+                        autoSends[id] = recent + [Date()]
+                        h.write(Data((pw + "\n").utf8))
+                        states[id] = .starting
+                        append(id, "[DevHub] auto re-auth: password sent\n")
+                        Self.notify("Auto re-authenticated", name)
+                        return
+                    }
+                    if states[id] != .needsReauth {
+                        Self.notify("Auto re-auth keeps failing", "\(name): check the saved password")
+                    }
+                }
                 if states[id] != .needsReauth {
                     states[id] = .needsReauth
-                    let name = profiles.first { $0.id == id }?.name ?? "profile"
                     Self.notify("Re-authentication needed", name)
                 }
                 return
