@@ -10,6 +10,7 @@ struct DevHubApp: App {
     @StateObject private var clip = ClipStore()
 
     init() {
+        DispatchQueue.global().async { _ = UserEnv.env }
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
     }

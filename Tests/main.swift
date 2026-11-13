@@ -97,6 +97,13 @@ func liveEditor() {
     check((f?.pointSize ?? 0) > 25, "heading is large")
 }
 
+func userPath() {
+    let path = UserEnv.env["PATH"] ?? ""
+    check(path.contains("/opt/homebrew/bin") && path.contains(NSHomeDirectory() + "/bin"), "user PATH merged: \(path)")
+    let r = shell("command -v alloydb-auth-proxy >/dev/null || [ ! -x $HOME/bin/alloydb-auth-proxy ]")
+    check(r.code == 0, "shell finds ~/bin tools")
+}
+
 func sqlFormat() {
     let out = SQLFormat.format("select a,b from t where x=1 and y=2 order by a")
     check(out == "SELECT a,\n  b\nFROM t\nWHERE x = 1\n  AND y = 2\nORDER BY a", "sql format: \(out.debugDescription)")
@@ -130,6 +137,6 @@ func timestamp() {
 }
 
 segCodecRoundTrip(); markdownBlocks(); readOnlyGuard(); diffMarksChangedLine(); cron()
-cronNL(); ptyPassword(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
+cronNL(); ptyPassword(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

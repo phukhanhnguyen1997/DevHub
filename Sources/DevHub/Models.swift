@@ -159,11 +159,40 @@ enum Vault {
     }
 }
 
+/// PATH as seen by the user's interactive terminal (loads ~/.zshrc), resolved once and merged with common bin dirs.
+enum UserEnv {
+    static let env: [String: String] = {
+        var e = ProcessInfo.processInfo.environment
+        let home = NSHomeDirectory()
+        var parts: [String] = []
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        p.arguments = ["-lic", "print -r -- __PATH__$PATH"]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        p.standardInput = FileHandle.nullDevice
+        if (try? p.run()) != nil {
+            let killer = DispatchWorkItem { if p.isRunning { p.terminate() } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 8, execute: killer)
+            let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            p.waitUntilExit(); killer.cancel()
+            if let line = out.split(separator: "\n").last(where: { $0.contains("__PATH__") }),
+               let r = line.range(of: "__PATH__") { parts += line[r.upperBound...].split(separator: ":").map(String.init) }
+        }
+        parts += ["\(home)/bin", "\(home)/.local/bin", "\(home)/go/bin", "/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"]
+        parts += (e["PATH"] ?? "").split(separator: ":").map(String.init)
+        var seen = Set<String>()
+        e["PATH"] = parts.filter { !$0.isEmpty && seen.insert($0).inserted }.joined(separator: ":")
+        return e
+    }()
+}
+
 func shell(_ cmd: String, env: [String: String] = [:], timeout: TimeInterval = 30) -> (out: String, code: Int32) {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/bin/zsh")
     p.arguments = ["-lc", cmd]
-    var e = ProcessInfo.processInfo.environment
+    var e = UserEnv.env
     env.forEach { e[$0.key] = $0.value }
     p.environment = e
     let pipe = Pipe()

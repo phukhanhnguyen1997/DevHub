@@ -106,7 +106,7 @@ final class ConnectionManager: ObservableObject {
     // MARK: google auth pre-check
 
     func usesGcloud(_ p: Profile) -> Bool { p.command.contains("gcloud") }
-    func usesADC(_ p: Profile) -> Bool { p.command.contains("cloud-sql-proxy") }
+    func usesADC(_ p: Profile) -> Bool { p.command.contains("cloud-sql-proxy") || p.command.contains("alloydb-auth-proxy") }
 
     func checkGoogleAuth() {
         let needGcloud = profiles.contains { usesGcloud($0) && procs[$0.id] != nil }
@@ -173,6 +173,7 @@ final class ConnectionManager: ObservableObject {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/script")
         proc.arguments = ["-q", "/dev/null", "/bin/zsh", "-lc", cmd]
+        proc.environment = UserEnv.env
         let inPipe = Pipe(), outPipe = Pipe()
         proc.standardInput = inPipe
         proc.standardOutput = outPipe
@@ -258,6 +259,7 @@ final class ConnectionManager: ObservableObject {
         // `script` gives the command a real controlling TTY so gcloud can prompt for passwords.
         proc.arguments = ["-q", "/dev/null", "/bin/zsh", "-lc", Vault.substitute(p.command)]
         if !p.workDir.isEmpty { proc.currentDirectoryURL = URL(fileURLWithPath: (p.workDir as NSString).expandingTildeInPath) }
+        proc.environment = UserEnv.env
         let inPipe = Pipe(), outPipe = Pipe()
         proc.standardInput = inPipe
         proc.standardOutput = outPipe

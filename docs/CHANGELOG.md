@@ -2,6 +2,8 @@
 
 Newest first. Hashes refer to git commits.
 
+- Connections: child processes inherit the PATH of the user terminal (~/.zshrc, ~/bin, ~/.local/bin, Homebrew), so any CLI works without full paths. alloydb-auth-proxy counts as ADC-based.
+
 - Cmd+K: opening a note from search scrolls to the first match and flashes it.
 
 - Notes: Notion-style "Page" editor (live markdown styling, `/` block menu, list continuation, clickable to-dos, ⌘B/⌘I/⌘E) and 5s autosave (also on note switch / app deactivate).
