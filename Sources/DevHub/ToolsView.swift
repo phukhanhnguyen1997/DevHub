@@ -2,7 +2,7 @@ import SwiftUI
 import CryptoKit
 
 enum ToolKind: String, CaseIterable, Identifiable {
-    case json = "JSON", yaml = "JSON minify", base64 = "Base64", url = "URL", jwt = "JWT", hash = "Hash", uuid = "UUID / ObjectId", password = "Password", time = "Timestamp", regex = "Regex", diff = "Diff", cron = "Cron", sql = "SQL format", csv = "CSV / JSON / INSERT", ts = "JSON → TypeScript"
+    case json = "JSON Format", yaml = "JSON minify", base64 = "Base64", url = "URL", jwt = "JWT", hash = "Hash", uuid = "UUID / ObjectId", password = "Password", time = "Unix Timestamp", regex = "Regex", diff = "Diff Checker", cron = "Cron", sql = "SQL format", csv = "CSV / JSON / INSERT", ts = "JSON → TypeScript", hex = "Hex ↔ Text"
     var id: String { rawValue }
 }
 
@@ -12,6 +12,8 @@ struct ToolsView: View {
     @State private var input = ""
     @State private var extra = ""
     @State private var decode = false
+    @State private var search = ""
+    @State private var onlyMatches = false
     @State private var cronMode = "Cron → English"
 
     var kind: ToolKind { app.toolKind }
@@ -48,7 +50,7 @@ struct ToolsView: View {
                     }.pickerStyle(.segmented)
                     if csvMode.hasSuffix("INSERT") { TextField("Table name", text: $extra).textFieldStyle(.roundedBorder).frame(width: 160) }
                 }
-                if [.base64, .url].contains(kind) { Toggle("Decode", isOn: $decode).toggleStyle(.switch) }
+                if [.base64, .url, .hex].contains(kind) { Toggle(kind == .hex ? "Hex → Text" : "Decode", isOn: $decode).toggleStyle(.switch) }
                 if kind == .cron {
                     Picker("", selection: $cronMode) { ForEach(["Cron → English", "English → Cron"], id: \.self) { Text($0) } }
                         .pickerStyle(.segmented).frame(width: 300)
@@ -59,6 +61,16 @@ struct ToolsView: View {
             TextEditor(text: $input).font(.system(.body, design: .monospaced)).frame(minHeight: 140).border(.gray.opacity(0.4))
             HStack {
                 Text("Output").font(.caption).foregroundStyle(.secondary)
+                if kind == .json || kind == .yaml {
+                    HStack(spacing: 4) {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                        TextField("Search output (key or value)", text: $search).textFieldStyle(.plain).frame(width: 220)
+                        if !search.isEmpty { Text("\(OutputSearch.count(output, search)) matches").font(.caption).foregroundStyle(.secondary) }
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.line))
+                    Toggle("Only matching lines", isOn: $onlyMatches).toggleStyle(.checkbox).font(.caption)
+                }
                 Spacer()
                 if kind == .cron && cronMode == "English → Cron", let r = CronNL.parse(input) {
                     Button("Copy expression") {
@@ -72,10 +84,15 @@ struct ToolsView: View {
                 }
             }
             ScrollView {
-                Text(output).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                Text(shownOutput).font(.system(.body, design: .monospaced)).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }.padding(6).background(.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
         }.padding()
+    }
+
+    var shownOutput: AttributedString {
+        guard kind == .json || kind == .yaml else { return AttributedString(output) }
+        return OutputSearch.highlight(output, term: search, onlyMatches: onlyMatches)
     }
 
     var output: String {
@@ -112,6 +129,7 @@ struct ToolsView: View {
             }
         case .uuid, .diff: return ""
         case .time: return Self.time(input)
+        case .hex: return HexTool.convert(input, decode: decode)
         case .regex: return Self.regex(extra, input)
         }
     }
@@ -355,5 +373,61 @@ struct TimeToolView: View {
         guard let line = result.split(separator: "\n").first(where: { $0.hasPrefix(key) }) else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(line.replacingOccurrences(of: key, with: "").trimmingCharacters(in: .whitespaces), forType: .string)
+    }
+}
+
+
+enum OutputSearch {
+    static func count(_ text: String, _ term: String) -> Int {
+        guard !term.isEmpty else { return 0 }
+        return text.components(separatedBy: "\n").reduce(0) { $0 + $1.lowercased().components(separatedBy: term.lowercased()).count - 1 }
+    }
+
+    static func highlight(_ text: String, term: String, onlyMatches: Bool) -> AttributedString {
+        let t = term.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return AttributedString(text) }
+        var lines = text.components(separatedBy: "\n")
+        var numbers = Array(1...max(1, lines.count))
+        if onlyMatches {
+            let keep = lines.indices.filter { lines[$0].range(of: t, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+            numbers = keep.map { $0 + 1 }
+            lines = keep.map { lines[$0] }
+            if lines.isEmpty { return AttributedString("No match for \"\(t)\"") }
+        }
+        let width = String(numbers.last ?? 0).count
+        var out = AttributedString()
+        for (i, line) in lines.enumerated() {
+            var row = AttributedString(line + (i == lines.count - 1 ? "" : "\n"))
+            var from = row.startIndex
+            while from < row.endIndex, let r = row[from...].range(of: t, options: [.caseInsensitive, .diacriticInsensitive]) {
+                row[r].backgroundColor = .yellow.opacity(0.55)
+                row[r].foregroundColor = .black
+                from = r.upperBound
+            }
+            if onlyMatches {
+                var n = AttributedString(String(repeating: " ", count: width - String(numbers[i]).count) + "\(numbers[i])  ")
+                n.foregroundColor = .secondary
+                out += n
+            }
+            out += row
+        }
+        return out
+    }
+}
+
+enum HexTool {
+    static func convert(_ s: String, decode: Bool) -> String {
+        if s.isEmpty { return "" }
+        if !decode { return Data(s.utf8).map { String(format: "%02x", $0) }.joined(separator: " ") }
+        var h = s.replacingOccurrences(of: "(?i)0x|\\\\x|[\\s,:;-]", with: "", options: .regularExpression)
+        guard h.range(of: "^[0-9a-fA-F]*$", options: .regularExpression) != nil else { return "Invalid hex: only 0-9 a-f allowed" }
+        if h.count % 2 != 0 { return "Invalid hex: odd number of digits (\(h.count))" }
+        var bytes: [UInt8] = []
+        while !h.isEmpty {
+            bytes.append(UInt8(h.prefix(2), radix: 16)!)
+            h.removeFirst(2)
+        }
+        if let utf8 = String(bytes: bytes, encoding: .utf8) { return utf8 }
+        return String(bytes: bytes, encoding: .isoLatin1).map { "(not valid UTF-8, shown as Latin-1)\n" + $0 } ?? "(binary data)"
     }
 }

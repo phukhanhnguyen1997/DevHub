@@ -2,6 +2,8 @@
 
 Newest first. Hashes refer to git commits.
 
+- Notifications are native (click opens DevHub on the related tab/profile, no more Script Editor). Tools: JSON Format (+ output search, only-matching-lines), Unix Timestamp, Diff Checker, new Hex ↔ Text.
+
 - Connections: child processes inherit the PATH of the user terminal (~/.zshrc, ~/bin, ~/.local/bin, Homebrew), so any CLI works without full paths. alloydb-auth-proxy counts as ADC-based.
 
 - Cmd+K: opening a note from search scrolls to the first match and flashes it.

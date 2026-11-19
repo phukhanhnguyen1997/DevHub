@@ -58,6 +58,11 @@ struct RootView: View {
             }
         }
         .sheet(isPresented: $app.showPalette) { PaletteView() }
+        .onReceive(NotificationCenter.default.publisher(for: .devhubOpenTarget)) { n in
+            let info = n.userInfo as? [String: String] ?? [:]
+            if let t = info["tab"], let tab = Tab(rawValue: t) { app.tab = tab }
+            if let p = info["profile"], let id = UUID(uuidString: p) { app.selectedProfile = id }
+        }
         .frame(minWidth: 980, minHeight: 620)
     }
 }

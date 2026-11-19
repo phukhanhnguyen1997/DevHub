@@ -353,16 +353,16 @@ final class ConnectionManager: ObservableObject {
                         h.write(Data((pw + "\n").utf8))
                         states[id] = .starting
                         append(id, "[DevHub] auto re-auth: password sent\n")
-                        Self.notify("Auto re-authenticated", name)
+                        Self.notify("Auto re-authenticated", name, profile: id)
                         return
                     }
                     if states[id] != .needsReauth {
-                        Self.notify("Auto re-auth keeps failing", "\(name): check the saved password")
+                        Self.notify("Auto re-auth keeps failing", "\(name): check the saved password", profile: id)
                     }
                 }
                 if states[id] != .needsReauth {
                     states[id] = .needsReauth
-                    Self.notify("Re-authentication needed", name)
+                    Self.notify("Re-authentication needed", name, profile: id)
                 }
                 return
             }
@@ -453,11 +453,7 @@ final class ConnectionManager: ObservableObject {
         kill(pid, SIGTERM)
     }
 
-    static func notify(_ title: String, _ body: String) {
-        let t = title.replacingOccurrences(of: "\"", with: "'")
-        let b = body.replacingOccurrences(of: "\"", with: "'")
-        DispatchQueue.global().async {
-            _ = shell("osascript -e 'display notification \"\(b)\" with title \"\(t)\" sound name \"Glass\"'", timeout: 5)
-        }
+    static func notify(_ title: String, _ body: String, tab: Tab = .connections, profile: UUID? = nil) {
+        Notifier.post(title, body, tab: tab, profile: profile)
     }
 }

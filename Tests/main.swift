@@ -104,6 +104,17 @@ func userPath() {
     check(r.code == 0, "shell finds ~/bin tools")
 }
 
+func hexAndSearch() {
+    check(HexTool.convert("48 65 6c 6c 6f", decode: true) == "Hello", "hex decode")
+    check(HexTool.convert("0x48,0x69", decode: true) == "Hi", "hex decode 0x")
+    check(HexTool.convert("Hi", decode: false) == "48 69", "hex encode")
+    check(HexTool.convert("e1ba", decode: true).hasPrefix("(not valid UTF-8"), "hex bad utf8")
+    check(HexTool.convert("abc", decode: true).hasPrefix("Invalid"), "hex odd")
+    check(OutputSearch.count("{\n  \"Name\": \"a\",\n  \"name2\": 1\n}", "name") == 2, "search count")
+    let a = OutputSearch.highlight("a\nfoo\nb", term: "FOO", onlyMatches: true)
+    check(String(a.characters).contains("foo") && !String(a.characters).contains("\nb"), "only matching lines")
+}
+
 func sqlFormat() {
     let out = SQLFormat.format("select a,b from t where x=1 and y=2 order by a")
     check(out == "SELECT a,\n  b\nFROM t\nWHERE x = 1\n  AND y = 2\nORDER BY a", "sql format: \(out.debugDescription)")
@@ -137,6 +148,6 @@ func timestamp() {
 }
 
 segCodecRoundTrip(); markdownBlocks(); readOnlyGuard(); diffMarksChangedLine(); cron()
-cronNL(); ptyPassword(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
+cronNL(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
