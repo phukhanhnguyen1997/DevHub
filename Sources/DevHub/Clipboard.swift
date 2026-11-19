@@ -2,13 +2,15 @@ import SwiftUI
 import AppKit
 import Carbon.HIToolbox
 import SQLite3
+import CryptoKit
 
 struct ClipEntry: Identifiable {
     var id: Int64
     let text: String
     let date: Date
     var pinned = false
-    var sensitive: Bool { ClipStore.looksSensitive(text) }
+    var imagePath: String? = nil
+    var sensitive: Bool { imagePath == nil && ClipStore.looksSensitive(text) }
 }
 
 @MainActor
@@ -30,6 +32,8 @@ final class ClipStore: ObservableObject {
     init() {
         sqlite3_open(Store.dir.appendingPathComponent("clipboard.sqlite").path, &db)
         run("CREATE TABLE IF NOT EXISTS clips (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL UNIQUE, date REAL NOT NULL, pinned INTEGER NOT NULL DEFAULT 0)")
+        run("ALTER TABLE clips ADD COLUMN image TEXT")
+        try? FileManager.default.createDirectory(at: Self.imgDir, withIntermediateDirectories: true)
         run("CREATE INDEX IF NOT EXISTS idx_clips_date ON clips(date)")
         prune()
         timer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in
@@ -39,6 +43,8 @@ final class ClipStore: ObservableObject {
             Task { @MainActor in self?.prune() }
         }
     }
+
+    static var imgDir: URL { Store.dir.appendingPathComponent("ClipImages") }
 
     @discardableResult
     private func run(_ sql: String, _ args: [Any] = []) -> Bool {
@@ -62,12 +68,13 @@ final class ClipStore: ObservableObject {
     private func reload() {
         var out: [ClipEntry] = []
         var st: OpaquePointer?
-        if sqlite3_prepare_v2(db, "SELECT id, text, date, pinned FROM clips ORDER BY date DESC LIMIT 1000", -1, &st, nil) == SQLITE_OK {
+        if sqlite3_prepare_v2(db, "SELECT id, text, date, pinned, image FROM clips ORDER BY date DESC LIMIT 1000", -1, &st, nil) == SQLITE_OK {
             while sqlite3_step(st) == SQLITE_ROW {
                 let t = sqlite3_column_text(st, 1).map { String(cString: $0) } ?? ""
                 out.append(ClipEntry(id: sqlite3_column_int64(st, 0), text: t,
                                      date: Date(timeIntervalSince1970: sqlite3_column_double(st, 2)),
-                                     pinned: sqlite3_column_int(st, 3) != 0))
+                                     pinned: sqlite3_column_int(st, 3) != 0,
+                                     imagePath: sqlite3_column_text(st, 4).map { String(cString: $0) }))
             }
         }
         sqlite3_finalize(st)
@@ -78,6 +85,33 @@ final class ClipStore: ObservableObject {
     func prune() {
         let cutoff = Date().addingTimeInterval(-Double(retentionDays) * 86400).timeIntervalSince1970
         run("DELETE FROM clips WHERE pinned = 0 AND date < ?", [cutoff])
+        reload()
+        sweepImages()
+    }
+
+    // Remove image files that no longer have a row.
+    private func sweepImages() {
+        let keep = Set(entries.compactMap { $0.imagePath })
+        var st: OpaquePointer?
+        var all = keep
+        if sqlite3_prepare_v2(db, "SELECT image FROM clips WHERE image IS NOT NULL", -1, &st, nil) == SQLITE_OK {
+            while sqlite3_step(st) == SQLITE_ROW { if let c = sqlite3_column_text(st, 0) { all.insert(String(cString: c)) } }
+        }
+        sqlite3_finalize(st)
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: Self.imgDir.path)) ?? []
+        for f in files where !all.contains(Self.imgDir.appendingPathComponent(f).path) {
+            try? FileManager.default.removeItem(at: Self.imgDir.appendingPathComponent(f))
+        }
+    }
+
+    private func captureImage(_ pb: NSPasteboard) {
+        guard let img = NSImage(pasteboard: pb), let tiff = img.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) else { return }
+        let hash = SHA256.hash(data: png).map { String(format: "%02x", $0) }.joined()
+        let path = Self.imgDir.appendingPathComponent("\(hash).png").path
+        if !FileManager.default.fileExists(atPath: path) { try? png.write(to: URL(fileURLWithPath: path)) }
+        let label = "[image \(rep.pixelsWide)×\(rep.pixelsHigh)]"
+        run("INSERT INTO clips (text, date, image) VALUES (?, ?, ?) ON CONFLICT(text) DO UPDATE SET date = excluded.date", ["img:\(hash)|\(label)", Date().timeIntervalSince1970, path])
         reload()
     }
 
@@ -93,24 +127,32 @@ final class ClipStore: ObservableObject {
         if selfWrite { selfWrite = false; return }
         let types = pb.types?.map(\.rawValue) ?? []
         if types.contains("org.nspasteboard.ConcealedType") || types.contains("org.nspasteboard.TransientType") { return }
-        guard let s = pb.string(forType: .string), !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let s = pb.string(forType: .string), !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            captureImage(pb)
+            return
+        }
         run("INSERT INTO clips (text, date) VALUES (?, ?) ON CONFLICT(text) DO UPDATE SET date = excluded.date", [s, Date().timeIntervalSince1970])
         run("DELETE FROM clips WHERE pinned = 0 AND id NOT IN (SELECT id FROM clips ORDER BY date DESC LIMIT 5000)")
         reload()
+        sweepImages()
     }
 
     func copy(_ e: ClipEntry) {
         selfWrite = true
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(e.text, forType: .string)
+        if let p = e.imagePath, let img = NSImage(contentsOfFile: p) {
+            NSPasteboard.general.writeObjects([img])
+        } else {
+            NSPasteboard.general.setString(e.text, forType: .string)
+        }
         lastCount = NSPasteboard.general.changeCount
     }
 
     func togglePin(_ e: ClipEntry) {
         run("UPDATE clips SET pinned = ? WHERE id = ?", [e.pinned ? 0 : 1, e.id]); reload()
     }
-    func delete(_ e: ClipEntry) { run("DELETE FROM clips WHERE id = ?", [e.id]); reload() }
-    func clearUnpinned() { run("DELETE FROM clips WHERE pinned = 0"); reload() }
+    func delete(_ e: ClipEntry) { run("DELETE FROM clips WHERE id = ?", [e.id]); reload(); sweepImages() }
+    func clearUnpinned() { run("DELETE FROM clips WHERE pinned = 0"); reload(); sweepImages() }
 }
 
 struct ClipboardView: View {
@@ -152,8 +194,14 @@ struct ClipboardView: View {
         let hidden = e.sensitive && !revealed.contains(e.id)
         return HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(hidden ? "•••••••• sensitive — click Reveal" : String(e.text.prefix(400)))
-                    .font(.system(.callout, design: .monospaced)).lineLimit(5).textSelection(.enabled)
+                if let p = e.imagePath, let img = NSImage(contentsOfFile: p) {
+                    Image(nsImage: img).resizable().scaledToFit().frame(maxWidth: 360, maxHeight: 160, alignment: .leading)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    Text(e.text.split(separator: "|").last.map(String.init) ?? "[image]").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(hidden ? "•••••••• sensitive — click Reveal" : String(e.text.prefix(400)))
+                        .font(.system(.callout, design: .monospaced)).lineLimit(5).textSelection(.enabled)
+                }
                 Text(e.date.formatted(date: .abbreviated, time: .standard)).font(.caption2).foregroundStyle(.secondary)
             }
             Spacer()
