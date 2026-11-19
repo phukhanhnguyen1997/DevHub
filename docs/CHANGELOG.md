@@ -2,6 +2,10 @@
 
 Newest first. Hashes refer to git commits.
 
+- Repo moved to ~/Documents/personal/DevHub; remote set to personal GitHub (`github-personal`); docs updated.
+- Clipboard: filter by type (Text, Image, File, Link, Email, Color) with counts; Finder file copies are captured as paths.
+- Clipboard: captures images (PNG in `ClipImages/`, thumbnail, copy back, cleaned up with retention).
+- Clipboard: history stored in SQLite (`clipboard.sqlite`) with selectable retention (1d/3d/7d/14d/1 month, pinned kept).
 - Notifications are native (click opens DevHub on the related tab/profile, no more Script Editor). Tools: JSON Format (+ output search, only-matching-lines), Unix Timestamp, Diff Checker, new Hex ↔ Text.
 
 - Connections: child processes inherit the PATH of the user terminal (~/.zshrc, ~/bin, ~/.local/bin, Homebrew), so any CLI works without full paths. alloydb-auth-proxy counts as ADC-based.
