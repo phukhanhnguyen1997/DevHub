@@ -4,12 +4,29 @@ import Carbon.HIToolbox
 import SQLite3
 import CryptoKit
 
+enum ClipKind: String, CaseIterable, Identifiable {
+    case all = "All", text = "Text", image = "Image", file = "File", link = "Link", email = "Email", color = "Color"
+    var id: String { rawValue }
+}
+
 struct ClipEntry: Identifiable {
     var id: Int64
     let text: String
     let date: Date
     var pinned = false
     var imagePath: String? = nil
+    var kind: ClipKind {
+        if imagePath != nil { return .image }
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        func m(_ p: String) -> Bool { t.range(of: p, options: [.regularExpression, .caseInsensitive]) != nil }
+        let lines = t.split(whereSeparator: \.isNewline).map(String.init)
+        if !lines.isEmpty, lines.allSatisfy({ $0.hasPrefix("file://") || $0.hasPrefix("/") || $0.hasPrefix("~/") }),
+           lines.allSatisfy({ !$0.contains(" ") || FileManager.default.fileExists(atPath: ($0.hasPrefix("file://") ? URL(string: $0)?.path ?? $0 : ($0 as NSString).expandingTildeInPath)) }) { return .file }
+        if m("^https?://\\S+$") || m("^www\\.\\S+\\.\\S+$") { return .link }
+        if m("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$") { return .email }
+        if m("^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$") || m("^(rgba?|hsla?)\\([^)]*\\)$") { return .color }
+        return .text
+    }
     var sensitive: Bool { imagePath == nil && ClipStore.looksSensitive(text) }
 }
 
@@ -127,6 +144,12 @@ final class ClipStore: ObservableObject {
         if selfWrite { selfWrite = false; return }
         let types = pb.types?.map(\.rawValue) ?? []
         if types.contains("org.nspasteboard.ConcealedType") || types.contains("org.nspasteboard.TransientType") { return }
+        if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
+            let paths = urls.map(\.path).joined(separator: "\n")
+            run("INSERT INTO clips (text, date) VALUES (?, ?) ON CONFLICT(text) DO UPDATE SET date = excluded.date", [paths, Date().timeIntervalSince1970])
+            reload()
+            return
+        }
         guard let s = pb.string(forType: .string), !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             captureImage(pb)
             return
@@ -158,10 +181,12 @@ final class ClipStore: ObservableObject {
 struct ClipboardView: View {
     @EnvironmentObject var clip: ClipStore
     @State private var query = ""
+    @State private var kind: ClipKind = .all
     @State private var revealed: Set<Int64> = []
 
     var shown: [ClipEntry] {
-        let f = query.isEmpty ? clip.entries : clip.entries.filter { $0.text.localizedCaseInsensitiveContains(query) }
+        let base = kind == .all ? clip.entries : clip.entries.filter { $0.kind == kind }
+        let f = query.isEmpty ? base : base.filter { $0.text.localizedCaseInsensitiveContains(query) }
         return f.filter(\.pinned) + f.filter { !$0.pinned }
     }
 
@@ -170,8 +195,13 @@ struct ClipboardView: View {
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Search clipboard history", text: $query).textFieldStyle(.plain)
+                Picker("Type", selection: $kind) {
+                    ForEach(ClipKind.allCases) { k in
+                        Text(k == .all ? "All" : "\(k.rawValue) (\(clip.entries.filter { $0.kind == k }.count))").tag(k)
+                    }
+                }.frame(width: 150)
                 Spacer()
-                Text("\(clip.entries.count) items").font(.caption).foregroundStyle(.secondary)
+                Text("\(shown.count)/\(clip.entries.count) items").font(.caption).foregroundStyle(.secondary)
                 Picker("Keep", selection: $clip.retentionDays) {
                     ForEach(ClipStore.retentionOptions, id: \.days) { Text($0.label).tag($0.days) }
                 }.frame(width: 130).help("Unpinned items older than this are deleted automatically. Pinned items are kept.")
