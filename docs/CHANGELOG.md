@@ -2,6 +2,10 @@
 
 Newest first. Hashes refer to git commits.
 
+## v0.1.0
+
+First release: tunnel manager with auto re-auth, notes with Cmd+K search, DB quick query, vault, port monitor, SQLite clipboard history and developer tools.
+
 - Repo moved to ~/Documents/personal/DevHub; remote set to personal GitHub (`github-personal`); docs updated.
 - Clipboard: filter by type (Text, Image, File, Link, Email, Color) with counts; Finder file copies are captured as paths.
 - Clipboard: captures images (PNG in `ClipImages/`, thumbnail, copy back, cleaned up with retention).
