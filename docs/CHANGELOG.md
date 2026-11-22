@@ -4,6 +4,8 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
+- Todos redesign: card UI with priority stripe, stats header, progress % (e.g. 1 of 3 sub-items = 33%), DONE enabled only when all sub-items are complete, todo-to-todo links with notes (table `todo_links`, searchable, logged as linked/unlinked/link note).
+
 - Todos: "New…" / double-click opens a modal with title, description, sub-item checklist, priority, due date and done flag. Sub-items are stored in `todo_subs`, shown with progress on each row, searchable, and sub-item completions are written to the Activity log.
 
 - Settings (⌘,): record custom shortcuts for every tab and tool, number tabs by sidebar order, reset. Sidebar tabs can be reordered by drag and drop (persisted).
