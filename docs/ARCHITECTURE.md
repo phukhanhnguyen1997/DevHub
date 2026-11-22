@@ -13,7 +13,7 @@ SwiftPM executable `DevHub`, sources in `Sources/DevHub/`.
 | `Markdown.swift` / `BlockEditor.swift` | Markdown renderer; block editor (`SegCodec`) |
 | `DataViews.swift` | DB Query, Ports, Vault views |
 | `Shortcuts.swift` | `ShortcutStore` (UserDefaults `shortcutMap.v1`), key recorder, Settings view |
-| `TodoView.swift` | `TodoStore` (SQLite `todos.sqlite`: `todos` + `todo_subs` + `todo_links` + append-only `todo_log`), Todos UI |
+| `TodoView.swift` | `TodoStore` (SQLite `todos.sqlite`: `todos` (incl. `status`) + `todo_subs` + `todo_links` + append-only `todo_log`), Todos UI |
 | `Clipboard.swift` | `ClipStore` (SQLite `clipboard.sqlite` + `ClipImages/`, retention, type classification), view, Carbon global hotkey (⌃⌥K) |
 | `ToolsView.swift`, `ToolsExtra.swift`, `Converters.swift` | All dev tools |
 

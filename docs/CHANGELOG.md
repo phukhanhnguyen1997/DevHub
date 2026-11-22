@@ -4,6 +4,8 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
+- Todos redesign (bmad-ux, direction A "soft cards"): cards collapse/expand per item plus Expand all / Collapse all; bigger progress (15pt %, thick bar, count); round sub-item checks; long titles/descriptions wrap fully. New layouts: List (group by date Overdue/Today/Upcoming/No date, or by priority), Kanban Board (To do / Doing / Done, drag to move), Calendar (month/week, Monday-first). Additive schema change: `todos.status` (0 to do, 1 doing), logged as started / moved to to do. See docs/ux/todos-redesign/.
+
 - Todos: due date picker redesigned (bmad-ux review, direction A+B): quick list with dates, custom Monday-first calendar with workload dots, time presets. See docs/ux/due-date-picker/.
 
 - Todos: new due date picker (popover with quick chips Today / Tomorrow / Next week / Next month, month calendar, optional time). Due labels show relative + absolute (e.g. "Tomorrow · 23 Nov, 09:00"); overdue is time-aware.

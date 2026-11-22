@@ -159,6 +159,14 @@ func dueDates() {
     check(!dueHasTime(today) && (!dueHasTime(past) || isOverdue(past)), "due: past timed date is overdue")
     let p = subProgress([SubDraft(title: "a", done: true), SubDraft(title: "b", done: false), SubDraft(title: "c", done: false)])
     check(p.percent == 33 && p.done == 1, "subtask progress 33%")
+    check(dueBucket(nil) == .none && dueBucket(today) == .today, "bucket: none/today")
+    check(dueBucket(cal.date(byAdding: .day, value: -2, to: today)!) == .overdue, "bucket: overdue")
+    check(dueBucket(cal.date(byAdding: .day, value: 3, to: today)!) == .upcoming, "bucket: upcoming")
+    let week = calendarDays(anchor: Date(), week: true)
+    var mon = Calendar.current; mon.firstWeekday = 2
+    check(week.count == 7 && mon.component(.weekday, from: week[0]) == 2, "calendar: Monday-first week")
+    let month = calendarDays(anchor: Date(), week: false)
+    check(month.count % 7 == 0 && month.count >= 28, "calendar: month grid is whole weeks")
 }
 cronNL(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")

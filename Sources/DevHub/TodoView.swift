@@ -10,6 +10,7 @@ struct TodoItem: Identifiable, Equatable {
     var created: Date
     var done: Date?
     var deleted: Bool
+    var status: Int = 0 // 0 to do, 1 doing; done is tracked by `done`
 }
 
 struct SubDraft: Identifiable, Equatable {
@@ -58,6 +59,7 @@ final class TodoStore: ObservableObject {
         run("CREATE TABLE IF NOT EXISTS todo_subs (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, pos INTEGER NOT NULL DEFAULT 0)")
         run("CREATE TABLE IF NOT EXISTS todo_links (id INTEGER PRIMARY KEY AUTOINCREMENT, a INTEGER NOT NULL, b INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', created REAL NOT NULL)")
         run("CREATE INDEX IF NOT EXISTS idx_log_date ON todo_log(date)")
+        run("ALTER TABLE todos ADD COLUMN status INTEGER NOT NULL DEFAULT 0") // no-op error when the column already exists
         reload()
     }
 
@@ -88,12 +90,13 @@ final class TodoStore: ObservableObject {
     func reload() {
         var out: [TodoItem] = []
         var st: OpaquePointer?
-        if sqlite3_prepare_v2(db, "SELECT id, title, detail, priority, due, created, done, deleted FROM todos ORDER BY created DESC", -1, &st, nil) == SQLITE_OK {
+        if sqlite3_prepare_v2(db, "SELECT id, title, detail, priority, due, created, done, deleted, status FROM todos ORDER BY created DESC", -1, &st, nil) == SQLITE_OK {
             while sqlite3_step(st) == SQLITE_ROW {
                 out.append(TodoItem(id: sqlite3_column_int64(st, 0), title: text(st, 1), detail: text(st, 2),
                                     priority: Int(sqlite3_column_int(st, 3)), due: optDate(st, 4),
                                     created: Date(timeIntervalSince1970: sqlite3_column_double(st, 5)),
-                                    done: optDate(st, 6), deleted: sqlite3_column_int(st, 7) != 0))
+                                    done: optDate(st, 6), deleted: sqlite3_column_int(st, 7) != 0,
+                                    status: Int(sqlite3_column_int(st, 8))))
             }
         }
         sqlite3_finalize(st)
@@ -156,14 +159,14 @@ final class TodoStore: ObservableObject {
         let old = i.id == 0 ? [] : (subs[i.id] ?? [])
         let oldLinks = i.id == 0 ? [] : (links[i.id] ?? [])
         if i.id == 0 {
-            run("INSERT INTO todos (title, detail, priority, due, created, done) VALUES (?, ?, ?, ?, ?, ?)",
-                [t, i.detail, i.priority, i.due?.timeIntervalSince1970, Date().timeIntervalSince1970, i.done?.timeIntervalSince1970])
+            run("INSERT INTO todos (title, detail, priority, due, created, done, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [t, i.detail, i.priority, i.due?.timeIntervalSince1970, Date().timeIntervalSince1970, i.done?.timeIntervalSince1970, i.status])
             i.id = sqlite3_last_insert_rowid(db)
             log(i.id, "created", t)
         } else {
             let prev = items.first { $0.id == i.id }
-            run("UPDATE todos SET title = ?, detail = ?, priority = ?, due = ?, done = ? WHERE id = ?",
-                [t, i.detail, i.priority, i.due?.timeIntervalSince1970, i.done?.timeIntervalSince1970, i.id])
+            run("UPDATE todos SET title = ?, detail = ?, priority = ?, due = ?, done = ?, status = ? WHERE id = ?",
+                [t, i.detail, i.priority, i.due?.timeIntervalSince1970, i.done?.timeIntervalSince1970, i.status, i.id])
             if prev?.done == nil && i.done != nil { log(i.id, "completed", t) }
             else if prev?.done != nil && i.done == nil { log(i.id, "reopened", t) }
             if prev?.title != t || prev?.detail != i.detail || prev?.priority != i.priority || prev?.due != i.due || old.count != drafts.count { log(i.id, "edited", t) }
@@ -210,13 +213,21 @@ final class TodoStore: ObservableObject {
         reload()
     }
 
+    // Board moves: 0 = To do, 1 = Doing. Returns false when the todo can't change (e.g. already done).
+    func setStatus(_ i: TodoItem, _ status: Int) {
+        guard i.done == nil, i.status != status else { return }
+        run("UPDATE todos SET status = ? WHERE id = ?", [status, i.id])
+        log(i.id, status == 1 ? "started" : "moved to to do", i.title)
+        reload()
+    }
+
     func toggleDone(_ i: TodoItem) {
         if i.done == nil {
             guard canComplete(i.id) else { return }
             run("UPDATE todos SET done = ? WHERE id = ?", [Date().timeIntervalSince1970, i.id])
             log(i.id, "completed", i.title)
         } else {
-            run("UPDATE todos SET done = NULL WHERE id = ?", [i.id])
+            run("UPDATE todos SET done = NULL, status = 0 WHERE id = ?", [i.id])
             log(i.id, "reopened", i.title)
         }
         reload()
@@ -275,6 +286,32 @@ func dueLabel(_ d: Date) -> String {
     var s = "\(rel) · \(d.formatted(.dateTime.day().month(.abbreviated)))"
     if dueHasTime(d) { s += ", \(d.formatted(date: .omitted, time: .shortened))" }
     return s
+}
+
+enum DueBucket: Int, CaseIterable {
+    case overdue, today, upcoming, none
+    var title: String { ["Overdue", "Today", "Upcoming", "No date"][rawValue] }
+}
+
+func dueBucket(_ d: Date?) -> DueBucket {
+    guard let d else { return .none }
+    if isOverdue(d) { return .overdue }
+    return Calendar.current.isDateInToday(d) ? .today : .upcoming
+}
+
+// Monday-first grid of days for the month (or week) containing `anchor`.
+func calendarDays(anchor: Date, week: Bool) -> [Date] {
+    var cal = Calendar.current
+    cal.firstWeekday = 2
+    if week {
+        let start = cal.dateInterval(of: .weekOfYear, for: anchor)!.start
+        return (0..<7).map { cal.date(byAdding: .day, value: $0, to: start)! }
+    }
+    let month = cal.dateInterval(of: .month, for: anchor)!
+    let first = cal.dateInterval(of: .weekOfYear, for: month.start)!.start
+    let last = cal.dateInterval(of: .weekOfYear, for: cal.date(byAdding: .day, value: -1, to: month.end)!)!.end
+    let n = cal.dateComponents([.day], from: first, to: last).day ?? 35
+    return (0..<n).map { cal.date(byAdding: .day, value: $0, to: first)! }
 }
 
 struct DueDateButton: View {
@@ -501,6 +538,21 @@ struct TodoView: View {
     @State private var newTitle = ""
     @State private var editing: TodoItem?
     @State private var creating = false
+    @State private var layout: Layout = .list
+    @State private var grouping: Grouping = .date
+    @State private var collapsed: Set<Int64> = []
+    @State private var calWeek = false
+    @State private var calAnchor = Date()
+
+    enum Layout: String, CaseIterable, Identifiable {
+        case list = "List", board = "Board", calendar = "Calendar"
+        var id: String { rawValue }
+        var icon: String { ["list.bullet", "rectangle.split.3x1", "calendar"][Self.allCases.firstIndex(of: self)!] }
+    }
+    enum Grouping: String, CaseIterable, Identifiable {
+        case date = "By date", priority = "By priority"
+        var id: String { rawValue }
+    }
 
     func inRange(_ d: Date) -> Bool {
         guard let b = range.bounds(from: from, to: to) else { return true }
@@ -540,6 +592,7 @@ struct TodoView: View {
             header
             Divider()
             if mode == .active { quickAdd }
+            if mode != .history { viewBar }
             content
         }
         .background(Color(nsColor: .windowBackgroundColor))
@@ -586,6 +639,27 @@ struct TodoView: View {
         }.padding(14)
     }
 
+    var viewBar: some View {
+        HStack(spacing: 10) {
+            if mode == .active {
+                Picker("", selection: $layout) {
+                    ForEach(Layout.allCases) { Label($0.rawValue, systemImage: $0.icon).tag($0) }
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 270)
+                if layout == .list {
+                    Picker("", selection: $grouping) { ForEach(Grouping.allCases) { Text($0.rawValue).tag($0) } }
+                        .pickerStyle(.segmented).labelsHidden().frame(width: 190)
+                }
+            }
+            Spacer()
+            if mode != .active || layout == .list {
+                Button { collapsed = [] } label: { Label("Expand all", systemImage: "chevron.down.2") }
+                Button { collapsed = Set(store.items.map(\.id)) } label: { Label("Collapse all", systemImage: "chevron.up.2") }
+            }
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 14).padding(.top, 10)
+    }
+
     func stat(_ value: String, _ label: String, _ color: Color) -> some View {
         HStack(spacing: 8) {
             Text(value).font(.title2.bold()).foregroundStyle(color)
@@ -609,7 +683,12 @@ struct TodoView: View {
 
     @ViewBuilder var content: some View {
         switch mode {
-        case .active: cards(active, icon: "checklist", empty: "Nothing to do", hint: "Add a todo above, or press New todo for sub-items and links.")
+        case .active:
+            switch layout {
+            case .list: groupedList
+            case .board: board
+            case .calendar: calendar
+            }
         case .done: doneLog
         case .trash: cards(trash, icon: "trash", empty: "Trash is empty", hint: "Deleted todos stay here and can be restored.")
         case .history: historyList
@@ -681,6 +760,7 @@ struct TodoView: View {
     func icon(_ a: String) -> String {
         switch a {
         case "created": return "plus.circle.fill"
+        case "started": return "play.circle.fill"
         case "completed": return "checkmark.circle.fill"
         case "reopened": return "arrow.uturn.backward.circle"
         case "deleted": return "trash.fill"
@@ -702,79 +782,102 @@ struct TodoView: View {
         }
     }
 
+    func expandable(_ i: TodoItem) -> Bool {
+        !i.detail.isEmpty || !(store.subs[i.id] ?? []).isEmpty || !(store.links[i.id] ?? []).isEmpty
+    }
+
+    func toggleCollapse(_ id: Int64) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
+        }
+    }
+
+    func progressRow(_ p: (done: Int, total: Int, percent: Int)) -> some View {
+        let color: Color = p.percent == 100 ? .green : .accentColor
+        return HStack(spacing: 10) {
+            Text("\(p.percent)%").font(.system(size: 15, weight: .bold).monospacedDigit()).foregroundStyle(color)
+                .frame(width: 44, alignment: .leading)
+            ProgressView(value: Double(p.done), total: Double(max(p.total, 1))).tint(color).scaleEffect(x: 1, y: 1.8)
+            Text("\(p.done)/\(p.total)").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(.secondary)
+        }
+    }
+
     func card(_ i: TodoItem) -> some View {
         let subs = store.subs[i.id] ?? []
         let p = subProgress(subs)
         let overdue = i.done == nil && (i.due.map(isOverdue) ?? false)
         let canDone = store.canComplete(i.id)
+        let canExpand = expandable(i)
+        let open = canExpand && !collapsed.contains(i.id)
         return HStack(alignment: .top, spacing: 0) {
             RoundedRectangle(cornerRadius: 2).fill(i.priority == 0 ? Color.clear : priorityColors[i.priority]).frame(width: 4)
             HStack(alignment: .top, spacing: 12) {
                 if i.deleted {
-                    Image(systemName: "trash").font(.title2).foregroundStyle(.secondary)
+                    Image(systemName: "trash").font(.system(size: 18)).foregroundStyle(.secondary).frame(width: 22)
                 } else {
                     Button { store.toggleDone(i) } label: {
-                        Image(systemName: i.done == nil ? "circle" : "checkmark.circle.fill").font(.title2)
+                        Image(systemName: i.done == nil ? "circle" : "checkmark.circle.fill").font(.system(size: 20))
                             .foregroundStyle(i.done != nil ? Color.green : (canDone ? Color.secondary : Color.secondary.opacity(0.3)))
                     }
                     .buttonStyle(.plain).disabled(i.done == nil && !canDone)
                     .help(i.done == nil && !canDone ? "Finish all sub-items first" : (i.done == nil ? "Mark as done" : "Reopen"))
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(i.title).font(.headline).strikethrough(i.done != nil).foregroundStyle(i.done != nil ? .secondary : .primary)
-                    if !i.detail.isEmpty { Text(i.detail).font(.callout).foregroundStyle(.secondary).lineLimit(3) }
-                    if !subs.isEmpty {
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack(spacing: 8) {
-                                ProgressView(value: Double(p.done), total: Double(p.total)).tint(p.percent == 100 ? .green : .accentColor)
-                                Text("\(p.percent)%").font(.caption.bold().monospacedDigit()).foregroundStyle(p.percent == 100 ? .green : .secondary)
-                                Text("\(p.done)/\(p.total)").font(.caption).foregroundStyle(.secondary)
-                            }.frame(maxWidth: 320)
-                            ForEach(subs.prefix(5)) { sub in
-                                HStack(spacing: 6) {
-                                    Button { store.toggleSub(i, sub) } label: {
-                                        Image(systemName: sub.done ? "checkmark.square.fill" : "square").foregroundStyle(sub.done ? Color.green : Color.secondary)
-                                    }.buttonStyle(.plain).disabled(i.deleted)
-                                    Text(sub.title).font(.callout).strikethrough(sub.done).foregroundStyle(sub.done ? .secondary : .primary)
-                                }
-                            }
-                            if subs.count > 5 { Text("+\(subs.count - 5) more").font(.caption).foregroundStyle(.secondary) }
-                        }
-                    }
-                    if let ls = store.links[i.id], !ls.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(ls.prefix(3)) { l in
-                                Button {
-                                    if let t = store.items.first(where: { $0.id == l.otherId }) { editing = t }
-                                } label: {
-                                    HStack(spacing: 5) {
-                                        Image(systemName: "link").font(.caption2)
-                                        Text(store.title(l.otherId)).font(.caption.bold())
-                                        if !l.note.isEmpty { Text("— \(l.note)").font(.caption).foregroundStyle(.secondary).lineLimit(1) }
-                                    }
-                                    .padding(.horizontal, 8).padding(.vertical, 3)
-                                    .background(Capsule().fill(Color.purple.opacity(0.12)))
-                                }.buttonStyle(.plain)
-                            }
-                            if ls.count > 3 { Text("+\(ls.count - 3) more links").font(.caption).foregroundStyle(.secondary) }
-                        }
-                    }
-                    HStack(spacing: 8) {
+                    Text(i.title).font(.system(size: 14, weight: .semibold)).strikethrough(i.done != nil)
+                        .foregroundStyle(i.done != nil ? .secondary : .primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 6) {
                         if i.priority > 0 { chip(priorityNames[i.priority], "flag.fill", priorityColors[i.priority]) }
+                        if i.status == 1 && i.done == nil { chip("Doing", "play.fill", .blue) }
                         if let d = i.due { chip(dueLabel(d), "calendar", overdue ? .red : .secondary) }
                         if let d = i.done { chip("Done \(d.formatted(date: .abbreviated, time: .shortened))", "checkmark", .green) }
-                        else { Text("Created \(i.created.formatted(date: .abbreviated, time: .omitted))").font(.caption2).foregroundStyle(.tertiary) }
+                        let nl = store.links[i.id]?.count ?? 0
+                        if nl > 0 { chip("\(nl)", "link", .purple) }
                     }
+                    if !subs.isEmpty { progressRow(p) }
+                    if open {
+                        if !i.detail.isEmpty {
+                            Text(i.detail).font(.system(size: 13)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                        if !subs.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(subs) { sub in
+                                    Button { store.toggleSub(i, sub) } label: {
+                                        HStack(alignment: .firstTextBaseline, spacing: 9) {
+                                            SubCheck(on: sub.done).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+                                            Text(sub.title).font(.system(size: 13)).strikethrough(sub.done)
+                                                .foregroundStyle(sub.done ? .secondary : .primary)
+                                                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                                            Spacer(minLength: 0)
+                                        }.contentShape(Rectangle())
+                                    }.buttonStyle(.plain).disabled(i.deleted)
+                                }
+                            }
+                            .padding(.top, 8)
+                            .overlay(alignment: .top) { Divider() }
+                        }
+                        linkChips(i)
+                    }
+                    if i.done == nil { Text("Created \(i.created.formatted(date: .abbreviated, time: .omitted))").font(.system(size: 11)).foregroundStyle(.tertiary) }
                 }
                 Spacer(minLength: 8)
-                if i.deleted {
-                    Button("Restore") { store.restore(i) }
-                } else {
-                    Menu {
-                        Button("Open") { editing = i }
-                        Button("Delete", role: .destructive) { store.remove(i) }
-                    } label: { Image(systemName: "ellipsis.circle").font(.title3) }
-                        .menuStyle(.borderlessButton).fixedSize()
+                HStack(spacing: 6) {
+                    if i.deleted {
+                        Button("Restore") { store.restore(i) }
+                    } else {
+                        Menu {
+                            Button("Open") { editing = i }
+                            if i.done == nil { Button(i.status == 1 ? "Move to To do" : "Start (Doing)") { store.setStatus(i, i.status == 1 ? 0 : 1) } }
+                            Button("Delete", role: .destructive) { store.remove(i) }
+                        } label: { Image(systemName: "ellipsis.circle").font(.system(size: 16)) }
+                            .menuStyle(.borderlessButton).fixedSize()
+                    }
+                    if canExpand {
+                        Button { toggleCollapse(i.id) } label: {
+                            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 22, height: 22).contentShape(Rectangle())
+                        }.buttonStyle(.plain).help(open ? "Collapse" : "Expand")
+                    }
                 }
             }.padding(14)
         }
@@ -786,10 +889,194 @@ struct TodoView: View {
         .onTapGesture(count: 2) { if !i.deleted { editing = i } }
     }
 
+    @ViewBuilder func linkChips(_ i: TodoItem) -> some View {
+        if let ls = store.links[i.id], !ls.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(ls) { l in
+                    Button {
+                        if let t = store.items.first(where: { $0.id == l.otherId }) { editing = t }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "link").font(.system(size: 10))
+                            Text(store.title(l.otherId)).font(.system(size: 11, weight: .semibold))
+                            if !l.note.isEmpty { Text("— \(l.note)").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1) }
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Capsule().fill(Color.purple.opacity(0.12)))
+                    }.buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: list grouped by date or priority
+
+    var groupedList: some View {
+        let groups: [(String, Color, [TodoItem])]
+        if grouping == .date {
+            groups = DueBucket.allCases.map { b in
+                (b.title, b == .overdue ? Color.red : Color.secondary, active.filter { dueBucket($0.due) == b }.sorted { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) })
+            }
+        } else {
+            groups = [3, 2, 1, 0].map { p in
+                (p == 0 ? "No priority" : priorityNames[p] + " priority", priorityColors[p], active.filter { $0.priority == p })
+            }
+        }
+        return Group {
+            if active.isEmpty { emptyState("checklist", "Nothing to do", "Add a todo above, or press New todo for sub-items and links.") }
+            else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(groups.filter { !$0.2.isEmpty }, id: \.0) { g in
+                            HStack(spacing: 8) {
+                                Text(g.0.uppercased()).font(.system(size: 11, weight: .bold)).tracking(0.5).foregroundStyle(g.1)
+                                Text("\(g.2.count)").font(.system(size: 11, weight: .semibold)).padding(.horizontal, 7).padding(.vertical, 1)
+                                    .background(Capsule().fill(g.1.opacity(0.15)))
+                            }.padding(.top, 8)
+                            ForEach(g.2) { card($0) }
+                        }
+                    }.padding(14)
+                }
+            }
+        }
+    }
+
+    // MARK: board
+
+    func boardCard(_ i: TodoItem) -> some View {
+        let subs = store.subs[i.id] ?? []
+        let p = subProgress(subs)
+        let overdue = i.done == nil && (i.due.map(isOverdue) ?? false)
+        return VStack(alignment: .leading, spacing: 7) {
+            Text(i.title).font(.system(size: 13, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+            if !subs.isEmpty { progressRow(p) }
+            HStack(spacing: 5) {
+                if i.priority > 0 { chip(priorityNames[i.priority], "flag.fill", priorityColors[i.priority]) }
+                if let d = i.due { chip(dueLabel(d), "calendar", overdue ? .red : .secondary) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.08)))
+        .onTapGesture(count: 2) { editing = i }
+        .draggable(String(i.id))
+    }
+
+    @discardableResult func moveCard(_ ids: [String], to column: Int) -> Bool {
+        guard let id = ids.first.flatMap({ Int64($0) }), var item = store.items.first(where: { $0.id == id }) else { return false }
+        if column == 2 { store.toggleDone(item); return true }
+        if item.done != nil { store.toggleDone(item); item = store.items.first { $0.id == id } ?? item }
+        store.setStatus(item, column)
+        return true
+    }
+
+    var board: some View {
+        let todo = active.filter { $0.status == 0 }
+        let doing = active.filter { $0.status == 1 }
+        let done = Array(doneItems.prefix(30))
+        let cols: [(String, Color, [TodoItem])] = [("To do", .secondary, todo), ("Doing", .blue, doing), ("Done", .green, done)]
+        return HStack(alignment: .top, spacing: 12) {
+            ForEach(Array(cols.enumerated()), id: \.offset) { n, c in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text(c.0.uppercased()).font(.system(size: 11, weight: .bold)).tracking(0.5).foregroundStyle(c.1)
+                        Text("\(c.2.count)").font(.system(size: 11, weight: .semibold)).padding(.horizontal, 7).padding(.vertical, 1)
+                            .background(Capsule().fill(c.1.opacity(0.15)))
+                    }.padding(.horizontal, 4)
+                    ScrollView { LazyVStack(spacing: 8) { ForEach(c.2) { boardCard($0) } } }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)))
+                .dropDestination(for: String.self) { ids, _ in moveCard(ids, to: n) }
+            }
+        }.padding(14)
+    }
+
+    // MARK: calendar
+
+    var calendar: some View {
+        var cal = Calendar.current
+        cal.firstWeekday = 2
+        let days = calendarDays(anchor: calAnchor, week: calWeek)
+        let dated = store.items.filter { !$0.deleted && $0.due != nil && matches($0) }
+        let undated = store.items.filter { !$0.deleted && $0.done == nil && $0.due == nil && matches($0) }.count
+        let title = calWeek
+            ? "\(days.first!.formatted(.dateTime.day().month(.abbreviated))) – \(days.last!.formatted(.dateTime.day().month(.abbreviated).year()))"
+            : calAnchor.formatted(.dateTime.month(.wide).year())
+        let step = { (n: Int) in calAnchor = cal.date(byAdding: calWeek ? .weekOfYear : .month, value: n, to: calAnchor)! }
+        let maxEvents = calWeek ? 12 : 3
+        return VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Button { step(-1) } label: { Image(systemName: "chevron.left") }
+                Text(title).font(.system(size: 15, weight: .semibold)).frame(minWidth: 170)
+                Button { step(1) } label: { Image(systemName: "chevron.right") }
+                Button("Today") { calAnchor = Date() }
+                Spacer()
+                if undated > 0 { Text("\(undated) without a due date").font(.caption).foregroundStyle(.secondary) }
+                Picker("", selection: $calWeek) { Text("Month").tag(false); Text("Week").tag(true) }
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 130)
+            }
+            HStack(spacing: 4) {
+                ForEach(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], id: \.self) {
+                    Text($0).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                }
+            }
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                    ForEach(days, id: \.self) { d in
+                        let list = dated.filter { cal.isDate($0.due!, inSameDayAs: d) }.sorted { $0.due! < $1.due! }
+                        let inMonth = calWeek || cal.isDate(d, equalTo: calAnchor, toGranularity: .month)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("\(cal.component(.day, from: d))")
+                                .font(.system(size: 11, weight: cal.isDateInToday(d) ? .bold : .regular))
+                                .foregroundStyle(cal.isDateInToday(d) ? Color.white : (inMonth ? .primary : .secondary))
+                                .frame(width: 20, height: 20)
+                                .background(Circle().fill(cal.isDateInToday(d) ? Color.accentColor : .clear))
+                            ForEach(list.prefix(maxEvents)) { i in
+                                Button { editing = i } label: {
+                                    Text(i.title).font(.system(size: 10.5, weight: .medium)).lineLimit(1)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 5).padding(.vertical, 2)
+                                        .foregroundStyle(eventColor(i))
+                                        .background(RoundedRectangle(cornerRadius: 4).fill(eventColor(i).opacity(0.15)))
+                                }.buttonStyle(.plain).help(i.title)
+                            }
+                            if list.count > maxEvents { Text("+\(list.count - maxEvents) more").font(.system(size: 10)).foregroundStyle(.secondary) }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(4)
+                        .frame(maxWidth: .infinity, minHeight: calWeek ? 300 : 96, alignment: .topLeading)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(inMonth ? 0.05 : 0.02)))
+                    }
+                }
+            }
+        }.padding(14)
+    }
+
+    func eventColor(_ i: TodoItem) -> Color {
+        if i.done != nil { return .green }
+        return i.due.map(isOverdue) == true ? .red : .accentColor
+    }
+
     func chip(_ text: String, _ icon: String, _ color: Color) -> some View {
-        Label(text, systemImage: icon).font(.caption2.weight(.medium)).foregroundStyle(color)
+        Label(text, systemImage: icon).font(.system(size: 11, weight: .medium)).foregroundStyle(color)
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(Capsule().fill(color.opacity(0.12)))
+    }
+}
+
+struct SubCheck: View {
+    let on: Bool
+    var body: some View {
+        ZStack {
+            Circle().strokeBorder(Color.secondary.opacity(0.55), lineWidth: 1.5).opacity(on ? 0 : 1)
+            if on {
+                Circle().fill(Color.green)
+                Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy)).foregroundStyle(.white)
+            }
+        }.frame(width: 18, height: 18)
     }
 }
 

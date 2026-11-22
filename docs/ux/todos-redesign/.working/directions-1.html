@@ -1,0 +1,118 @@
+<!doctype html><meta charset=utf-8><title>Todos redesign: directions</title><style>
+*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+body{margin:0;padding:28px;background:#e4e4ea;color:#1d1d1f;font-size:13px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:0 0 2px}
+p.s{color:#555;max-width:900px;margin:0 0 20px}p.r{color:#555;font-size:12px;max-width:620px;margin:0 0 10px}
+.win{width:640px;background:#f6f6f9;border-radius:12px;box-shadow:0 10px 36px #0003,0 0 0 .5px #0003;overflow:hidden;margin-bottom:34px}
+.row{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+.bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid #e4e4ea;background:#fff}
+.seg{display:flex;background:#eeeef2;border-radius:8px;padding:2px}.seg span{padding:4px 10px;border-radius:6px;font-size:12px}.seg .on{background:#fff;box-shadow:0 1px 2px #0002;font-weight:600}
+.btn{border:1px solid #dcdce2;border-radius:7px;padding:4px 9px;font-size:12px;background:#fff}.btn.p{background:#0a7aff;color:#fff;border-color:#0a7aff}
+.sp{flex:1}.search{background:#eeeef2;border-radius:8px;padding:5px 10px;color:#888;width:150px;font-size:12px}
+.body{padding:12px 14px}
+.grp{display:flex;align-items:center;gap:8px;margin:12px 2px 6px;font-weight:700;font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:#666}
+.grp .n{background:#e6e6ec;border-radius:999px;padding:1px 8px;font-size:11px}.grp.red{color:#d92d33}.grp.red .n{background:#fde5e6}
+.grp .ch{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;color:#999}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:600;background:#eeeef2;color:#666}
+.chip.red{background:#fde5e6;color:#d92d33}.chip.or{background:#fff0dc;color:#c46a00}.chip.pu{background:#efe9ff;color:#6c4bd8}.chip.gr{background:#e2f7e8;color:#1c8a3d}
+/* sub-item circle-check */
+.sc{width:18px;height:18px;border-radius:50%;border:1.6px solid #b9b9c2;display:inline-block;flex:none;position:relative}
+.sc.on{background:#2fb457;border-color:#2fb457}.sc.on:after{content:"";position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.sub{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px}.sub.d span.t{color:#999;text-decoration:line-through}
+.ring{--p:33;width:34px;height:34px;border-radius:50%;background:conic-gradient(#0a7aff calc(var(--p)*1%),#e6e6ec 0);display:grid;place-items:center;flex:none}
+.ring i{width:26px;height:26px;border-radius:50%;background:#fff;display:grid;place-items:center;font-style:normal;font-size:9.5px;font-weight:700}
+.ring.big{width:46px;height:46px}.ring.big i{width:36px;height:36px;font-size:11px}
+.ring.g{background:conic-gradient(#2fb457 calc(var(--p)*1%),#e6e6ec 0)}
+.pb{height:10px;border-radius:6px;background:#e6e6ec;overflow:hidden}.pb b{display:block;height:100%;background:#0a7aff;border-radius:6px}
+.pb.g b{background:#2fb457}
+.tick{width:22px;height:22px;border-radius:50%;border:2px solid #b9b9c2;flex:none}.tick.dis{opacity:.35}.tick.on{background:#2fb457;border-color:#2fb457}
+.t1{font-weight:600;font-size:14px}.mut{color:#8a8a90;font-size:12px}
+.chev{color:#8a8a90;font-size:12px;width:16px;text-align:center}
+/* A soft cards */
+.A .card{background:#fff;border-radius:14px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 3px #0001,0 0 0 .5px #0001}
+.A .head{display:flex;align-items:center;gap:11px}.A .meta{display:flex;gap:6px;margin-top:2px}
+.A .subs{margin:8px 0 2px 33px;border-top:1px solid #f0f0f4;padding-top:6px}.A .pbrow{display:flex;align-items:center;gap:10px;margin:10px 0 2px 33px}
+.A .pbrow .pct{font-size:22px;font-weight:800;color:#0a7aff}.A .pbrow .cnt{font-size:13px;color:#666;font-weight:600}.A .pbrow .pb{flex:1}
+/* B dense rows */
+.B .card{background:#fff;border-bottom:1px solid #ececf0;padding:7px 10px}.B .body{padding:0}.B .grp{margin:0;padding:10px 14px 6px;background:#f6f6f9}
+.B .head{display:flex;align-items:center;gap:9px}.B .head .t1{font-size:13px;font-weight:600;flex:1}
+.B .miniprog{display:flex;align-items:center;gap:8px;width:170px}.B .miniprog .pb{flex:1;height:8px}.B .miniprog b.n{font-size:15px;font-weight:800;min-width:42px;text-align:right}
+.B .subs{padding:4px 0 6px 52px}.B .sub{padding:3px 0}
+/* C bold progress */
+.C .card{background:#fff;border-radius:16px;padding:14px;margin-bottom:10px;box-shadow:0 2px 8px #0001}
+.C .head{display:flex;align-items:center;gap:12px}.C .hero{display:flex;align-items:center;gap:12px;margin:12px 0 6px}
+.C .hero .pct{font-size:30px;font-weight:800;line-height:1;color:#0a7aff;min-width:76px}.C .hero .pb{flex:1;height:14px}
+.C .hero .cnt{font-size:14px;font-weight:700;color:#444}
+.C .pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.C .pill{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:5px 12px 5px 7px;background:#f2f2f6;font-size:13px}
+.C .pill.d{background:#e2f7e8;color:#1c8a3d}.C .pill.d .t{text-decoration:line-through}
+/* board / calendar */
+.cols{display:flex;gap:10px;padding:12px}.col{flex:1;background:#ececf1;border-radius:12px;padding:8px;min-height:220px}
+.col h4{margin:2px 4px 8px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#666;display:flex;justify-content:space-between}
+.k{background:#fff;border-radius:10px;padding:9px;margin-bottom:7px;box-shadow:0 1px 2px #0002;font-size:12.5px}
+.k .pb{height:6px;margin-top:7px}.k .row2{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:12px}.cal em{font-style:normal;text-align:center;font-size:11px;color:#888}
+.cal div.d{background:#fff;border-radius:8px;min-height:62px;padding:4px;font-size:11px;color:#666}.cal .d.today{box-shadow:inset 0 0 0 1.5px #0a7aff}
+.cal .e{background:#e6f0ff;color:#0a5fd0;border-radius:4px;padding:1px 4px;margin-top:2px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal .e.r{background:#fde5e6;color:#d92d33}.cal .e.g{background:#e2f7e8;color:#1c8a3d}
+.note{background:#fff8dc;border:1px solid #ecd98a;border-radius:8px;padding:8px 10px;font-size:12px;max-width:640px;margin-bottom:14px}
+</style>
+<h1>Todos redesign: 3 directions</h1>
+<p class=s>Your 4 pain points are solved in all three: (1) every card collapses and expands, (2) a toolbar with Expand all / Collapse all, (3) progress % and count are big, (4) sub-items use a round check. Directions differ in personality and density. Pick one; board and calendar below follow the pick.</p>
+<div class=note><b>Checkbox vs radio:</b> a radio means "choose one of several". Sub-items are independent, so they are not radios. I use the round check (like Things and Apple Reminders): same visual family as the parent's round tick, but smaller and filled green when done.</div>
+<div class=row>
+<div><h2>A · Soft cards</h2><p class=r>Airy cards. Big bold % with a thick bar under the title. Sub-items listed with round checks. Best for scanning a few rich items.</p><div class="win A"><div class="bar"><div class="seg"><span class="on">List</span><span class="">Board</span><span class="">Calendar</span></div>
+<div class="seg"><span class="on">By date</span><span>By priority</span></div><span class="sp"></span>
+<span class="btn">⇣ Expand all</span><span class="btn">⇡ Collapse all</span><span class="search">⌕ Search</span><span class="btn p">+ New</span></div><div class="body">
+<div class="grp red">Overdue <span class="n">1</span><span class="ch">⌃ collapse group</span></div>
+<div class="card"><div class="head"><span class="tick dis"></span><div style="flex:1"><div class="t1">Deploy alloydb proxy fix</div><div class="meta"><span class="chip red">⚑ High</span><span class="chip red">📅 2 days overdue · 20 Nov</span><span class="chip pu">🔗 2</span></div></div><span class="chev">⌄</span></div>
+<div class="pbrow"><span class="pct">50%</span><div class="pb"><b style="width:50%"></b></div><span class="cnt">2 / 4</span></div>
+<div class="subs"><div class="sub d"><span class="sc on"></span><span class="t">Reproduce on staging</span></div><div class="sub d"><span class="sc on"></span><span class="t">Patch alloydb flag</span></div><div class="sub "><span class="sc "></span><span class="t">Roll out to prod</span></div><div class="sub "><span class="sc "></span><span class="t">Write postmortem</span></div></div></div>
+<div class="grp">Today <span class="n">2</span></div>
+<div class="card"><div class="head"><span class="tick dis"></span><div style="flex:1"><div class="t1">Home work</div><div class="meta"><span class="chip or">⚑ Medium</span><span class="chip">📅 Today · 22 Nov, 18:00</span></div></div><span class="chev">⌄</span></div>
+<div class="pbrow"><span class="pct">33%</span><div class="pb"><b style="width:33%"></b></div><span class="cnt">1 / 3</span></div>
+<div class="subs"><div class="sub d"><span class="sc on"></span><span class="t">Math</span></div><div class="sub "><span class="sc "></span><span class="t">Physics</span></div><div class="sub "><span class="sc "></span><span class="t">Chemistry</span></div></div></div>
+<div class="card"><div class="head"><span class="tick"></span><div style="flex:1"><div class="t1">Reply to Lan about contract</div><div class="meta"><span class="chip">📅 Today</span></div></div><span class="chev">›</span></div></div>
+<div class="grp">Upcoming <span class="n">1</span></div>
+<div class="card"><div class="head"><span class="tick dis"></span><div style="flex:1"><div class="t1">Plan Da Lat trip</div><div class="meta"><span class="chip">📅 In 9 days</span><span class="chip">0/5</span></div></div><span class="chev">›</span></div></div>
+</div></div></div>
+<div><h2>B · Dense rows</h2><p class=r>Linear style. Everything fits in one row: chevron, title, chips, inline bar with large %. Expand to see sub-items. Best for many items.</p><div class="win B"><div class="bar"><div class="seg"><span class="on">List</span><span class="">Board</span><span class="">Calendar</span></div>
+<div class="seg"><span class="on">By date</span><span>By priority</span></div><span class="sp"></span>
+<span class="btn">⇣ Expand all</span><span class="btn">⇡ Collapse all</span><span class="search">⌕ Search</span><span class="btn p">+ New</span></div><div class="body">
+<div class="grp red">Overdue <span class="n">1</span></div>
+<div class="card"><div class="head"><span class="chev">⌄</span><span class="tick dis"></span><span class="t1">Deploy alloydb proxy fix</span><span class="chip red">⚑</span><span class="chip red">20 Nov</span><div class="miniprog"><div class="pb"><b style="width:50%"></b></div><b class="n">50%</b></div></div>
+<div class="subs"><div class="sub d"><span class="sc on"></span><span class="t">Reproduce on staging</span></div><div class="sub d"><span class="sc on"></span><span class="t">Patch alloydb flag</span></div><div class="sub "><span class="sc "></span><span class="t">Roll out to prod</span></div><div class="sub "><span class="sc "></span><span class="t">Write postmortem</span></div></div></div>
+<div class="grp">Today <span class="n">2</span></div>
+<div class="card"><div class="head"><span class="chev">⌄</span><span class="tick dis"></span><span class="t1">Home work</span><span class="chip or">⚑</span><span class="chip">18:00</span><div class="miniprog"><div class="pb"><b style="width:33%"></b></div><b class="n">33%</b></div></div>
+<div class="subs"><div class="sub d"><span class="sc on"></span><span class="t">Math</span></div><div class="sub "><span class="sc "></span><span class="t">Physics</span></div><div class="sub "><span class="sc "></span><span class="t">Chemistry</span></div></div></div>
+<div class="card"><div class="head"><span class="chev">›</span><span class="tick"></span><span class="t1">Reply to Lan about contract</span><span class="chip">Today</span><div class="miniprog"></div></div></div>
+<div class="grp">Upcoming <span class="n">1</span></div>
+<div class="card"><div class="head"><span class="chev">›</span><span class="tick dis"></span><span class="t1">Plan Da Lat trip</span><span class="chip">+9d</span><div class="miniprog"><div class="pb"><b style="width:0%"></b></div><b class="n">0%</b></div></div></div>
+</div></div></div>
+<div><h2>C · Bold progress</h2><p class=r>Progress is the hero: 30pt %, thick bar, count. Sub-items are tappable pills. Best if finishing checklists is the main motivation.</p><div class="win C"><div class="bar"><div class="seg"><span class="on">List</span><span class="">Board</span><span class="">Calendar</span></div>
+<div class="seg"><span class="on">By date</span><span>By priority</span></div><span class="sp"></span>
+<span class="btn">⇣ Expand all</span><span class="btn">⇡ Collapse all</span><span class="search">⌕ Search</span><span class="btn p">+ New</span></div><div class="body">
+<div class="grp red">Overdue <span class="n">1</span></div>
+<div class="card"><div class="head"><span class="tick dis"></span><div style="flex:1"><div class="t1" style="font-size:16px">Deploy alloydb proxy fix</div></div><span class="chip red">⚑ High</span><span class="chip red">2 days overdue</span><span class="chev">⌄</span></div>
+<div class="hero"><span class="pct">50%</span><div class="pb"><b style="width:50%"></b></div><span class="cnt">2 of 4</span></div><div class="pills"><span class="pill d"><span class="sc on"></span><span class="t">Reproduce on staging</span></span><span class="pill d"><span class="sc on"></span><span class="t">Patch alloydb flag</span></span><span class="pill "><span class="sc "></span><span class="t">Roll out to prod</span></span><span class="pill "><span class="sc "></span><span class="t">Write postmortem</span></span></div></div>
+<div class="grp">Today <span class="n">2</span></div>
+<div class="card"><div class="head"><span class="tick dis"></span><div style="flex:1"><div class="t1" style="font-size:16px">Home work</div></div><span class="chip or">⚑ Medium</span><span class="chip">18:00</span><span class="chev">⌄</span></div>
+<div class="hero"><span class="pct">33%</span><div class="pb"><b style="width:33%"></b></div><span class="cnt">1 of 3</span></div><div class="pills"><span class="pill d"><span class="sc on"></span><span class="t">Math</span></span><span class="pill "><span class="sc "></span><span class="t">Physics</span></span><span class="pill "><span class="sc "></span><span class="t">Chemistry</span></span></div></div>
+<div class="card"><div class="head"><span class="tick"></span><div style="flex:1"><div class="t1" style="font-size:16px">Reply to Lan about contract</div></div><span class="chip">Today</span><span class="chev">›</span></div></div>
+</div></div></div>
+</div>
+<h1 style="margin-top:10px">Other views (shown in direction A's style)</h1>
+<div class=row><div><h2>Board</h2><p class=r>To do / Doing / Done. Needs a new "status" field on todos (a schema change, DDL to be confirmed with you first).</p><div class="win A"><div class="bar"><div class="seg"><span class="">List</span><span class="on">Board</span><span class="">Calendar</span></div>
+<div class="seg"><span class="on">By date</span><span>By priority</span></div><span class="sp"></span>
+<span class="btn">⇣ Expand all</span><span class="btn">⇡ Collapse all</span><span class="search">⌕ Search</span><span class="btn p">+ New</span></div><div class="cols">
+<div class="col"><h4>To do <span>3</span></h4>
+<div class="k"><b>Reply to Lan about contract</b><div class="row2"><span class="chip">Today</span></div></div>
+<div class="k"><b>Plan Da Lat trip</b><div class="row2"><span class="chip">+9d</span></div></div></div>
+<div class="col"><h4>Doing <span>2</span></h4>
+<div class="k"><b>Home work</b><div class="pb"><b style="width:33%"></b></div><div class="row2"><span class="chip or">⚑</span><span class="chip">33% · 1/3</span></div></div>
+<div class="k"><b>Deploy alloydb proxy fix</b><div class="pb"><b style="width:50%"></b></div><div class="row2"><span class="chip red">⚑ High</span><span class="chip red">overdue</span><span class="chip">50% · 2/4</span></div></div></div>
+<div class="col"><h4>Done <span>1</span></h4><div class="k"><b>Renew SSL cert</b><div class="pb g"><b style="width:100%"></b></div><div class="row2"><span class="chip gr">✓ Today</span></div></div></div>
+</div></div></div>
+<div><h2>Calendar</h2><p class=r>Month/week grid. Items appear on their due date, red = overdue, green = done.</p><div class="win A"><div class="bar"><div class="seg"><span class="">List</span><span class="">Board</span><span class="on">Calendar</span></div>
+<div class="seg"><span class="on">By date</span><span>By priority</span></div><span class="sp"></span>
+<span class="btn">⇣ Expand all</span><span class="btn">⇡ Collapse all</span><span class="search">⌕ Search</span><span class="btn p">+ New</span></div><div class="cal"><em>Mon</em><em>Tue</em><em>Wed</em><em>Thu</em><em>Fri</em><em>Sat</em><em>Sun</em><div class="d ">16</div><div class="d ">17</div><div class="d ">18</div><div class="d ">19</div><div class="d ">20<div class="e r">Deploy fix</div></div><div class="d ">21<div class="e g">Renew SSL</div></div><div class="d today">22<div class="e ">Home work 18:00</div></div><div class="d ">23</div><div class="d ">24<div class="e ">Reply to Lan</div></div><div class="d ">25</div><div class="d ">26</div><div class="d ">27<div class="e ">Plan Da Lat</div></div><div class="d ">28</div><div class="d ">29</div></div></div></div></div>
