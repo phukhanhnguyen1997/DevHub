@@ -279,6 +279,8 @@ func dueLabel(_ d: Date) -> String {
 
 struct DueDateButton: View {
     @Binding var due: Date?
+    var excludeId: Int64 = 0
+    @EnvironmentObject var store: TodoStore
     @State private var open = false
 
     var body: some View {
@@ -296,80 +298,186 @@ struct DueDateButton: View {
             .background(RoundedRectangle(cornerRadius: 8).fill((due.map { isOverdue($0) ? Color.red : Color.accentColor } ?? Color.primary).opacity(0.1)))
         }
         .buttonStyle(.plain)
-        .popover(isPresented: $open, arrowEdge: .bottom) { DuePopover(due: $due, close: { open = false }) }
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            DuePopover(due: $due, workload: workload, close: { open = false })
+        }
+    }
+
+    // Open todos per due day, excluding the one being edited.
+    var workload: [Date: Int] {
+        var m: [Date: Int] = [:]
+        let cal = Calendar.current
+        for t in store.items where !t.deleted && t.done == nil && t.id != excludeId {
+            if let d = t.due { m[cal.startOfDay(for: d), default: 0] += 1 }
+        }
+        return m
     }
 }
 
+// Quick list + month grid (Monday first) with workload dots + optional time presets.
 struct DuePopover: View {
     @Binding var due: Date?
+    var workload: [Date: Int]
     var close: () -> Void
-    @State private var date: Date
-    @State private var withTime: Bool
+    @State private var day: Date          // selected day at 00:00
+    @State private var time: Date?        // selected time of day, nil = date only
+    @State private var month: Date        // first day of the visible month
+    @State private var customTime = Date()
 
-    init(due: Binding<Date?>, close: @escaping () -> Void) {
+    static var cal: Calendar { var c = Calendar.current; c.firstWeekday = 2; return c }
+
+    init(due: Binding<Date?>, workload: [Date: Int], close: @escaping () -> Void) {
         _due = due
+        self.workload = workload
         self.close = close
-        let d = due.wrappedValue ?? Calendar.current.startOfDay(for: Date())
-        _date = State(initialValue: d)
-        _withTime = State(initialValue: dueHasTime(d))
+        let cal = Self.cal
+        let d = due.wrappedValue ?? Date()
+        let start = cal.startOfDay(for: d)
+        _day = State(initialValue: start)
+        _time = State(initialValue: due.wrappedValue.flatMap { dueHasTime($0) ? $0 : nil })
+        _month = State(initialValue: cal.date(from: cal.dateComponents([.year, .month], from: start))!)
+        _customTime = State(initialValue: due.wrappedValue.flatMap { dueHasTime($0) ? $0 : nil } ?? cal.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!)
     }
 
-    func day(_ offset: Int) -> Date {
-        let cal = Calendar.current
-        return cal.date(byAdding: .day, value: offset, to: cal.startOfDay(for: Date()))!
-    }
-    func nextMonday() -> Date {
-        let cal = Calendar.current
-        let w = cal.component(.weekday, from: Date()) // 1 = Sunday
-        return day((9 - w) % 7 == 0 ? 7 : (9 - w) % 7)
+    var cal: Calendar { Self.cal }
+    var today: Date { cal.startOfDay(for: Date()) }
+
+    var result: Date {
+        guard let t = time else { return day }
+        let c = cal.dateComponents([.hour, .minute], from: t)
+        return cal.date(bySettingHour: c.hour ?? 9, minute: c.minute ?? 0, second: 0, of: day) ?? day
     }
 
-    // Keeps the chosen time of day when jumping to another day.
-    func jump(_ d: Date) {
-        let cal = Calendar.current
-        if withTime {
-            let t = cal.dateComponents([.hour, .minute], from: date)
-            date = cal.date(bySettingHour: t.hour ?? 9, minute: t.minute ?? 0, second: 0, of: d) ?? d
-        } else { date = d }
+    func offset(_ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: today)! }
+    var nextMonday: Date {
+        let w = cal.component(.weekday, from: today) // 1 = Sunday
+        let n = (9 - w) % 7
+        return offset(n == 0 ? 7 : n)
+    }
+    var saturday: Date {
+        let w = cal.component(.weekday, from: today)
+        return offset((7 - w + 7) % 7 == 0 ? 7 : (7 - w + 7) % 7)
+    }
+
+    func pick(_ d: Date) {
+        day = cal.startOfDay(for: d)
+        month = cal.date(from: cal.dateComponents([.year, .month], from: day))!
+    }
+
+    var presets: [(String, String, Date)] {
+        [("Today", "sun.max", today), ("Tomorrow", "sunrise", offset(1)), ("This weekend", "figure.walk", saturday),
+         ("Next week", "arrow.right.circle", nextMonday), ("Next month", "calendar.badge.plus", cal.date(byAdding: .month, value: 1, to: today)!)]
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                quick("Today", day(0)); quick("Tomorrow", day(1)); quick("Next week", nextMonday()); quick("Next month", Calendar.current.date(byAdding: .month, value: 1, to: day(0))!)
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(spacing: 2) {
+                ForEach(presets, id: \.0) { p in
+                    let on = cal.isDate(day, inSameDayAs: p.2)
+                    Button { pick(p.2) } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: p.1).frame(width: 18).foregroundStyle(on ? Color.accentColor : .secondary)
+                            Text(p.0)
+                            Spacer()
+                            Text(p.2.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                                .font(.caption).foregroundStyle(on ? Color.accentColor : .secondary)
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 6)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(on ? Color.accentColor.opacity(0.14) : .clear))
+                        .contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                }
             }
-            DatePicker("", selection: Binding(get: { date }, set: { newValue in jump(newValue) }), displayedComponents: .date)
-                .datePickerStyle(.graphical).labelsHidden()
             Divider()
             HStack {
-                Toggle("Time", isOn: $withTime.animation()).toggleStyle(.switch)
-                    .onChange(of: withTime) { _, on in
-                        let cal = Calendar.current
-                        date = on ? (cal.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date) : cal.startOfDay(for: date)
-                    }
-                if withTime {
-                    DatePicker("", selection: $date, displayedComponents: .hourAndMinute).labelsHidden()
-                }
+                Button { month = cal.date(byAdding: .month, value: -1, to: month)! } label: { Image(systemName: "chevron.left") }.buttonStyle(.borderless)
                 Spacer()
-            }
+                Text(month.formatted(.dateTime.month(.wide).year())).font(.headline)
+                Spacer()
+                Button { pick(today) } label: { Text("Today").font(.caption) }.buttonStyle(.borderless)
+                Button { month = cal.date(byAdding: .month, value: 1, to: month)! } label: { Image(systemName: "chevron.right") }.buttonStyle(.borderless)
+            }.padding(.horizontal, 4)
+            grid
+            let n = workload[day] ?? 0
+            Text(n == 0 ? "Nothing else due \(day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))" : "\(n) other todo\(n == 1 ? "" : "s") due \(day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))")
+                .font(.caption).foregroundStyle(n >= 3 ? Color.orange : .secondary).padding(.horizontal, 4)
+            Divider()
+            timeRow
             HStack {
-                Button("Clear") { due = nil; close() }.foregroundStyle(.red)
+                Button("Clear") { due = nil; close() }.foregroundStyle(.red).buttonStyle(.borderless)
                 Spacer()
                 Button("Cancel") { close() }.keyboardShortcut(.cancelAction)
-                Button("Set due date") { due = date; close() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                Button("Set \(result.formatted(.dateTime.day().month(.abbreviated)))\(time == nil ? "" : ", " + result.formatted(date: .omitted, time: .shortened))") { due = result; close() }
+                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
         }
-        .padding(16).frame(width: 300)
+        .padding(14).frame(width: 320)
     }
 
-    func quick(_ title: String, _ d: Date) -> some View {
-        let selected = Calendar.current.isDate(date, inSameDayAs: d)
-        return Button { jump(d) } label: {
-            Text(title).font(.caption.weight(.medium)).lineLimit(1)
-                .padding(.horizontal, 8).padding(.vertical, 5)
-                .background(Capsule().fill(selected ? Color.accentColor : Color.primary.opacity(0.08)))
-                .foregroundStyle(selected ? Color.white : Color.primary)
-        }.buttonStyle(.plain)
+    var grid: some View {
+        let days = monthDays()
+        return VStack(spacing: 2) {
+            HStack(spacing: 0) {
+                ForEach(Array(["M", "T", "W", "T", "F", "S", "S"].enumerated()), id: \.offset) { _, d in
+                    Text(d).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                }
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 2) {
+                ForEach(Array(days.enumerated()), id: \.offset) { _, d in
+                    if let d {
+                        let sel = cal.isDate(d, inSameDayAs: day)
+                        let isToday = cal.isDate(d, inSameDayAs: today)
+                        let count = workload[d] ?? 0
+                        Button { pick(d) } label: {
+                            ZStack {
+                                Circle().fill(sel ? Color.accentColor : .clear)
+                                if isToday && !sel { Circle().stroke(Color.accentColor, lineWidth: 1.5) }
+                                Text("\(cal.component(.day, from: d))").font(.callout.weight(sel ? .bold : .regular))
+                                    .foregroundStyle(sel ? Color.white : (d < today ? Color.secondary : (isToday ? Color.accentColor : Color.primary)))
+                                if count > 0 {
+                                    Circle().fill(sel ? Color.white.opacity(0.8) : (count >= 3 ? Color.orange : Color.secondary))
+                                        .frame(width: 4, height: 4).offset(y: 11)
+                                }
+                            }.frame(height: 34).contentShape(Rectangle())
+                        }.buttonStyle(.plain).help(count == 0 ? "" : "\(count) due")
+                    } else { Color.clear.frame(height: 34) }
+                }
+            }
+        }
+    }
+
+    func monthDays() -> [Date?] {
+        let first = month
+        let wd = cal.component(.weekday, from: first)
+        let lead = (wd - cal.firstWeekday + 7) % 7
+        let count = cal.range(of: .day, in: .month, for: first)!.count
+        return Array(repeating: nil, count: lead) + (0..<count).map { cal.date(byAdding: .day, value: $0, to: first) }
+    }
+
+    @ViewBuilder var timeRow: some View {
+        if let t = time {
+            HStack(spacing: 6) {
+                Image(systemName: "clock").foregroundStyle(.secondary)
+                ForEach([9, 12, 15, 18], id: \.self) { h in
+                    let on = cal.component(.hour, from: t) == h && cal.component(.minute, from: t) == 0
+                    Button { setTime(h, 0) } label: {
+                        Text(String(format: "%d:00", h)).font(.caption.weight(.medium))
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(Capsule().fill(on ? Color.accentColor : Color.primary.opacity(0.08)))
+                            .foregroundStyle(on ? Color.white : Color.primary)
+                    }.buttonStyle(.plain)
+                }
+                DatePicker("", selection: Binding(get: { t }, set: { time = $0; customTime = $0 }), displayedComponents: .hourAndMinute).labelsHidden()
+                Spacer(minLength: 0)
+                Button { time = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.buttonStyle(.plain).help("Remove time")
+            }
+        } else {
+            Button { setTime(9, 0) } label: { Label("Add time", systemImage: "clock") }.buttonStyle(.borderless)
+        }
+    }
+
+    func setTime(_ h: Int, _ m: Int) {
+        time = cal.date(bySettingHour: h, minute: m, second: 0, of: Date())
     }
 }
 
@@ -808,7 +916,7 @@ struct TodoModal: View {
                                 ForEach(0..<4, id: \.self) { Text(priorityNames[$0]).tag($0) }
                             }.pickerStyle(.segmented).labelsHidden()
                         }
-                        section("Due date") { DueDateButton(due: $item.due) }
+                        section("Due date") { DueDateButton(due: $item.due, excludeId: item.id) }
                     }
                 }.padding(20)
             }

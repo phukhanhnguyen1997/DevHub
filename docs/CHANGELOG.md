@@ -4,6 +4,8 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
+- Todos: due date picker redesigned (bmad-ux review, direction A+B): quick list with dates, custom Monday-first calendar with workload dots, time presets. See docs/ux/due-date-picker/.
+
 - Todos: new due date picker (popover with quick chips Today / Tomorrow / Next week / Next month, month calendar, optional time). Due labels show relative + absolute (e.g. "Tomorrow · 23 Nov, 09:00"); overdue is time-aware.
 
 - Todos redesign: card UI with priority stripe, stats header, progress % (e.g. 1 of 3 sub-items = 33%), DONE enabled only when all sub-items are complete, todo-to-todo links with notes (table `todo_links`, searchable, logged as linked/unlinked/link note).

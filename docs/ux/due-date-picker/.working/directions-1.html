@@ -1,0 +1,108 @@
+<!doctype html><meta charset=utf-8><title>Due date picker — directions</title><style>
+*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+body{margin:0;padding:28px;background:#e9e9ee;color:#1d1d1f}
+h1{font-size:20px;margin:0 0 4px}p.s{margin:0 0 22px;color:#555;font-size:13px;max-width:900px}
+.row{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:34px}
+.col h2{font-size:14px;margin:0 0 2px}.col .r{font-size:12px;color:#555;max-width:320px;margin:0 0 10px;min-height:48px}
+.stage{padding:18px;border-radius:14px}
+.light{--bg:#fff;--fg:#1d1d1f;--mut:#8a8a90;--line:#ececf0;--chip:#f2f2f6;--acc:#6c5ce7;--accfg:#fff;--soft:#efecff;--red:#e5484d;background:#d9d9e0}
+.dark{--bg:#2b2b30;--fg:#f5f5f7;--mut:#9a9aa2;--line:#3a3a41;--chip:#38383f;--acc:#8b7dff;--accfg:#fff;--soft:#3a3560;--red:#ff6b70;background:#16161a}
+.pop{width:312px;background:var(--bg);color:var(--fg);border-radius:14px;box-shadow:0 12px 40px #0004,0 0 0 .5px #0002;padding:14px;font-size:13px}
+.in{display:flex;align-items:center;gap:8px;background:var(--chip);border-radius:9px;padding:8px 10px;margin-bottom:10px}
+.in .t{flex:1}.in .hint{color:var(--mut);font-size:11px}
+.parsed{color:var(--acc);font-weight:600;font-size:12px;margin:-4px 0 10px 2px}
+.list div{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px}
+.list div:hover,.list .on{background:var(--soft)}
+.list .ic{width:18px;text-align:center}.list .d{margin-left:auto;color:var(--mut);font-size:12px}
+.list .on .d{color:var(--acc)}
+hr{border:0;border-top:1px solid var(--line);margin:10px 0}
+.mh{display:flex;align-items:center;justify-content:space-between;margin:2px 4px 8px;font-weight:600}
+.mh span{color:var(--mut);font-weight:400;padding:0 6px}
+.g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.g em{font-style:normal;color:var(--mut);font-size:11px;padding:3px 0}
+.g b{font-weight:500;height:34px;line-height:34px;border-radius:50%;position:relative;font-size:13px}
+.g b.past{color:var(--mut)}.g b.today{box-shadow:inset 0 0 0 1.5px var(--acc);color:var(--acc)}
+.g b.sel{background:var(--acc);color:var(--accfg);box-shadow:none}
+.g b i{position:absolute;bottom:3px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--mut)}
+.g b.sel i{background:#fff9}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips span{background:var(--chip);border-radius:999px;padding:5px 10px;font-size:12px}
+.chips .on{background:var(--acc);color:var(--accfg)}
+.foot{display:flex;gap:8px;align-items:center;margin-top:12px}
+.foot .sp{flex:1}.btn{border-radius:8px;padding:6px 12px;font-weight:600;font-size:12px;background:var(--chip)}
+.btn.p{background:var(--acc);color:var(--accfg)}.btn.d{background:none;color:var(--red);padding-left:2px}
+.sec{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin:10px 4px 6px}
+.tl{display:flex;align-items:center;gap:8px}.tl .tt{margin-left:auto;display:flex;gap:6px}
+.load{font-size:11px;color:var(--mut);margin:8px 4px 0}
+.seg{display:flex;background:var(--chip);border-radius:9px;padding:2px;margin-bottom:10px}
+.seg span{flex:1;text-align:center;padding:5px;border-radius:7px;font-size:12px}.seg .on{background:var(--bg);box-shadow:0 1px 2px #0002;font-weight:600}
+</style>
+<h1>Due date picker — 3 directions</h1>
+<p class=s>Same popover, same content (Mon 23 Nov 2026 is "tomorrow"), three different personalities. Each is shown in light and dark. Pick one (or mix parts) — nothing is decided yet.</p>
+<div class=row>
+<div class=col><h2>A · Quick-list first</h2><p class=r>Things / Todoist style. A vertical list with weekday + date on the right is the primary path; typing and calendar are secondary. Calmest, most scannable.</p><div class="stage light"><div class="pop">
+<div class="in"><span>⌨︎</span><span class="t">Type: “fri 3pm”, “in 2 weeks”…</span></div>
+<div class="list">
+<div><span class="ic">☀️</span>Today<span class="d">Sun</span></div>
+<div class="on"><span class="ic">🌅</span>Tomorrow<span class="d">Mon 23 Nov</span></div>
+<div><span class="ic">📅</span>This weekend<span class="d">Sat 28 Nov</span></div>
+<div><span class="ic">➡️</span>Next week<span class="d">Mon 30 Nov</span></div>
+<div><span class="ic">🗓</span>Next month<span class="d">22 Dec</span></div>
+</div><hr>
+<div class="mh"><span>‹</span>November 2026<span>›</span></div>
+<div class="g"><em>M</em><em>T</em><em>W</em><em>T</em><em>F</em><em>S</em><em>S</em><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><b class="past">1</b><b class="past">2</b><b class="past">3</b><b class="past">4</b><b class="past">5</b><b class="past">6</b><b class="past">7</b><b class="past">8</b><b class="past">9</b><b class="past">10</b><b class="past">11</b><b class="past">12</b><b class="past">13</b><b class="past">14</b><b class="past">15</b><b class="past">16</b><b class="past">17</b><b class="past">18</b><b class="past">19</b><b class="past">20</b><b class="past">21</b><b class="today">22</b><b class="sel">23<i></i></b><b class="">24</b><b class="">25<i></i></b><b class="">26<i></i></b><b class="">27</b><b class="">28</b><b class="">29</b><b class="">30<i></i></b></div>
+<div class="foot"><span class="btn d">Clear</span><span class="sp"></span><span class="btn">⏰ Add time</span></div>
+</div></div></div>
+<div class=col><h2>&nbsp;</h2><p class=r>A · dark</p><div class="stage dark"><div class="pop">
+<div class="in"><span>⌨︎</span><span class="t">Type: “fri 3pm”, “in 2 weeks”…</span></div>
+<div class="list">
+<div><span class="ic">☀️</span>Today<span class="d">Sun</span></div>
+<div class="on"><span class="ic">🌅</span>Tomorrow<span class="d">Mon 23 Nov</span></div>
+<div><span class="ic">📅</span>This weekend<span class="d">Sat 28 Nov</span></div>
+<div><span class="ic">➡️</span>Next week<span class="d">Mon 30 Nov</span></div>
+<div><span class="ic">🗓</span>Next month<span class="d">22 Dec</span></div>
+</div><hr>
+<div class="mh"><span>‹</span>November 2026<span>›</span></div>
+<div class="g"><em>M</em><em>T</em><em>W</em><em>T</em><em>F</em><em>S</em><em>S</em><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><b class="past">1</b><b class="past">2</b><b class="past">3</b><b class="past">4</b><b class="past">5</b><b class="past">6</b><b class="past">7</b><b class="past">8</b><b class="past">9</b><b class="past">10</b><b class="past">11</b><b class="past">12</b><b class="past">13</b><b class="past">14</b><b class="past">15</b><b class="past">16</b><b class="past">17</b><b class="past">18</b><b class="past">19</b><b class="past">20</b><b class="past">21</b><b class="today">22</b><b class="sel">23<i></i></b><b class="">24</b><b class="">25<i></i></b><b class="">26<i></i></b><b class="">27</b><b class="">28</b><b class="">29</b><b class="">30<i></i></b></div>
+<div class="foot"><span class="btn d">Clear</span><span class="sp"></span><span class="btn">⏰ Add time</span></div>
+</div></div></div></div>
+<div class=row>
+<div class=col><h2>B · Calendar with workload</h2><p class=r>Custom month grid (no native control). Dots show days that already have todos so you can avoid piling up. Time as one-tap presets. Chips on top.</p><div class="stage light"><div class="pop">
+<div class="chips"><span>Today</span><span class="on">Tomorrow</span><span>Weekend</span><span>Next wk</span></div>
+<div class="mh" style="margin-top:14px"><span>‹</span>November 2026<span>›</span></div>
+<div class="g"><em>M</em><em>T</em><em>W</em><em>T</em><em>F</em><em>S</em><em>S</em><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><b class="past">1</b><b class="past">2</b><b class="past">3</b><b class="past">4</b><b class="past">5</b><b class="past">6</b><b class="past">7</b><b class="past">8</b><b class="past">9</b><b class="past">10</b><b class="past">11</b><b class="past">12</b><b class="past">13</b><b class="past">14</b><b class="past">15</b><b class="past">16</b><b class="past">17</b><b class="past">18</b><b class="past">19</b><b class="past">20</b><b class="past">21</b><b class="today">22</b><b class="">23<i></i></b><b class="sel">24</b><b class="">25<i></i></b><b class="">26<i></i></b><b class="">27</b><b class="">28</b><b class="">29</b><b class="">30<i></i></b></div>
+<div class="load">● dots = days that already have todos · Tue 24 Nov: 2 due</div>
+<hr>
+<div class="tl"><span>⏰ Time</span><div class="tt chips"><span>9:00</span><span class="on">12:00</span><span>15:00</span><span>18:00</span><span>Custom</span></div></div>
+<div class="foot"><span class="btn d">Clear</span><span class="sp"></span><span class="btn p">Tue 24 Nov, 12:00 ✓</span></div>
+</div></div></div>
+<div class=col><h2>&nbsp;</h2><p class=r>B · dark</p><div class="stage dark"><div class="pop">
+<div class="chips"><span>Today</span><span class="on">Tomorrow</span><span>Weekend</span><span>Next wk</span></div>
+<div class="mh" style="margin-top:14px"><span>‹</span>November 2026<span>›</span></div>
+<div class="g"><em>M</em><em>T</em><em>W</em><em>T</em><em>F</em><em>S</em><em>S</em><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><b class="past">1</b><b class="past">2</b><b class="past">3</b><b class="past">4</b><b class="past">5</b><b class="past">6</b><b class="past">7</b><b class="past">8</b><b class="past">9</b><b class="past">10</b><b class="past">11</b><b class="past">12</b><b class="past">13</b><b class="past">14</b><b class="past">15</b><b class="past">16</b><b class="past">17</b><b class="past">18</b><b class="past">19</b><b class="past">20</b><b class="past">21</b><b class="today">22</b><b class="">23<i></i></b><b class="sel">24</b><b class="">25<i></i></b><b class="">26<i></i></b><b class="">27</b><b class="">28</b><b class="">29</b><b class="">30<i></i></b></div>
+<div class="load">● dots = days that already have todos · Tue 24 Nov: 2 due</div>
+<hr>
+<div class="tl"><span>⏰ Time</span><div class="tt chips"><span>9:00</span><span class="on">12:00</span><span>15:00</span><span>18:00</span><span>Custom</span></div></div>
+<div class="foot"><span class="btn d">Clear</span><span class="sp"></span><span class="btn p">Tue 24 Nov, 12:00 ✓</span></div>
+</div></div></div></div>
+<div class=row>
+<div class=col><h2>C · Type-it natural language</h2><p class=r>One input understands “next friday at 3pm” and shows the parsed result live. Suggestions below, calendar as fallback. Fastest for keyboard users.</p><div class="stage light"><div class="pop">
+<div class="in"><span>✨</span><span class="t">next friday at 3pm</span></div>
+<div class="parsed">→ Fri 27 Nov, 15:00 · in 5 days</div>
+<div class="sec">Suggestions</div>
+<div class="chips"><span>Tomorrow 9:00</span><span>Fri 17:00</span><span>Next Mon</span><span>End of month</span></div>
+<div class="sec">Calendar</div>
+<div class="seg"><span class="on">Month</span><span>Week</span></div>
+<div class="g"><em>M</em><em>T</em><em>W</em><em>T</em><em>F</em><em>S</em><em>S</em><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><b class="past">1</b><b class="past">2</b><b class="past">3</b><b class="past">4</b><b class="past">5</b><b class="past">6</b><b class="past">7</b><b class="past">8</b><b class="past">9</b><b class="past">10</b><b class="past">11</b><b class="past">12</b><b class="past">13</b><b class="past">14</b><b class="past">15</b><b class="past">16</b><b class="past">17</b><b class="past">18</b><b class="past">19</b><b class="past">20</b><b class="past">21</b><b class="today">22</b><b class="">23<i></i></b><b class="">24</b><b class="">25<i></i></b><b class="">26<i></i></b><b class="sel">27</b><b class="">28</b><b class="">29</b><b class="">30<i></i></b></div>
+<div class="foot"><span class="btn d">Clear</span><span class="sp"></span><span class="btn">Cancel</span><span class="btn p">Set ↵</span></div>
+</div></div></div>
+<div class=col><h2>&nbsp;</h2><p class=r>C · dark</p><div class="stage dark"><div class="pop">
+<div class="in"><span>✨</span><span class="t">next friday at 3pm</span></div>
+<div class="parsed">→ Fri 27 Nov, 15:00 · in 5 days</div>
+<div class="sec">Suggestions</div>
+<div class="chips"><span>Tomorrow 9:00</span><span>Fri 17:00</span><span>Next Mon</span><span>End of month</span></div>
+<div class="sec">Calendar</div>
+<div class="seg"><span class="on">Month</span><span>Week</span></div>
+<div class="g"><em>M</em><em>T</em><em>W</em><em>T</em><em>F</em><em>S</em><em>S</em><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><span class="pad"></span><b class="past">1</b><b class="past">2</b><b class="past">3</b><b class="past">4</b><b class="past">5</b><b class="past">6</b><b class="past">7</b><b class="past">8</b><b class="past">9</b><b class="past">10</b><b class="past">11</b><b class="past">12</b><b class="past">13</b><b class="past">14</b><b class="past">15</b><b class="past">16</b><b class="past">17</b><b class="past">18</b><b class="past">19</b><b class="past">20</b><b class="past">21</b><b class="today">22</b><b class="">23<i></i></b><b class="">24</b><b class="">25<i></i></b><b class="">26<i></i></b><b class="sel">27</b><b class="">28</b><b class="">29</b><b class="">30<i></i></b></div>
+<div class="foot"><span class="btn d">Clear</span><span class="sp"></span><span class="btn">Cancel</span><span class="btn p">Set ↵</span></div>
+</div></div></div></div>
