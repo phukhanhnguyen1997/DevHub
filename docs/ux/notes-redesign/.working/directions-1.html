@@ -1,0 +1,79 @@
+<!doctype html><meta charset=utf-8><title>Notes redesign: directions</title><style>
+*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+body{margin:0;padding:28px;background:#e4e4ea;color:#1d1d1f;font-size:13px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 2px}
+p.s{color:#555;max-width:900px;margin:0 0 18px}p.r{color:#555;font-size:12px;max-width:900px;margin:0 0 10px}
+ul.f{margin:0 0 12px;padding-left:18px;font-size:12px;color:#444}
+.win{width:1000px;height:520px;background:#fff;border-radius:12px;box-shadow:0 10px 36px #0003,0 0 0 .5px #0003;overflow:hidden;display:flex;margin-bottom:38px}
+.mut{color:#8a8a90}.s11{font-size:11px}
+.pane{display:flex;flex-direction:column;min-width:0}
+.side{width:190px;background:#f3f3f7;border-right:1px solid #e4e4ea;padding:12px 10px}
+.side h5{margin:12px 6px 4px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8a8a90}
+.nav{padding:5px 8px;border-radius:7px;display:flex;gap:7px;align-items:center}.nav.on{background:#dde8ff;color:#0a5fd0;font-weight:600}.nav b{margin-left:auto;font-weight:400;color:#999;font-size:11px}
+.list{width:270px;border-right:1px solid #e4e4ea;background:#fff;overflow:hidden}
+.srch{margin:10px;background:#eeeef2;border-radius:8px;padding:6px 10px;color:#888;display:flex;justify-content:space-between}
+.srch kbd{font-size:10px;background:#fff;border-radius:4px;padding:0 5px;border:1px solid #ddd}
+.grp{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8a8a90;padding:10px 14px 4px;font-weight:700}
+.it{padding:8px 14px;border-bottom:1px solid #f0f0f4}.it.on{background:#e6f0ff}.it b{display:block;font-size:13px}.it span{color:#777;font-size:11.5px;display:block;margin-top:1px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.it .tg{display:flex;gap:4px;margin-top:4px}.tag{background:#eeeef2;border-radius:999px;padding:1px 7px;font-size:10.5px;color:#666}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.tbar{display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid #eee;color:#666}
+.tbar .sp{flex:1}.seg{display:flex;background:#eeeef2;border-radius:7px;padding:2px}.seg span{padding:3px 9px;border-radius:5px;font-size:11.5px}.seg .on{background:#fff;box-shadow:0 1px 2px #0002;font-weight:600}
+.doc{padding:26px 44px;overflow:hidden;max-width:700px}
+.doc h1{font-size:26px;margin:0 0 8px}.props{display:flex;gap:8px;align-items:center;margin-bottom:16px;color:#777;font-size:12px}
+.doc h3{margin:18px 0 6px;font-size:16px}.doc p{line-height:1.6;margin:6px 0;color:#333}
+pre{background:#f4f4f8;border-radius:8px;padding:10px 12px;font:12px ui-monospace,Menlo,monospace;margin:8px 0}
+.wl{color:#6c4bd8;background:#efe9ff;border-radius:4px;padding:0 4px}
+.right{width:210px;border-left:1px solid #e4e4ea;background:#fafafc;padding:12px 14px;font-size:12px}
+.right h5{margin:14px 0 6px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8a8a90}
+.right div.o{padding:3px 0;color:#444}.right div.o.l2{padding-left:12px;color:#666}.right div.o.on{color:#0a5fd0;font-weight:600}
+.tabs{display:flex;background:#ececf1;padding:6px 8px 0;gap:4px;border-bottom:1px solid #ddd}
+.tab{padding:6px 12px;border-radius:8px 8px 0 0;font-size:12px;background:#e0e0e8;color:#666;display:flex;gap:8px}.tab.on{background:#fff;color:#111;font-weight:600}.tab i{font-style:normal;color:#aaa}
+.status{display:flex;gap:14px;padding:6px 18px;border-top:1px solid #eee;font-size:11px;color:#888;background:#fafafc}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px;overflow:hidden}
+.cardn{background:#fff;border-radius:12px;padding:12px;box-shadow:0 1px 3px #0002,0 0 0 .5px #0001;height:132px;overflow:hidden}
+.cardn b{font-size:13.5px}.cardn p{font-size:11.5px;color:#777;margin:6px 0;line-height:1.45}
+.pinrow{display:flex;gap:10px;padding:14px 16px 0}.pin{flex:1;background:linear-gradient(135deg,#eef3ff,#f6efff);border-radius:12px;padding:10px 12px}
+.cmd{position:relative}.pal{position:absolute;left:230px;top:70px;width:520px;background:#fffffff2;border-radius:12px;box-shadow:0 16px 50px #0005,0 0 0 .5px #0004;padding:10px;z-index:5}
+.pal .q{padding:8px 10px;border-bottom:1px solid #eee;font-size:15px}.pal .r{padding:7px 10px;border-radius:7px;display:flex;justify-content:space-between;max-width:none;margin:0;font-size:12.5px;color:#222}.pal .r.on{background:#e6f0ff}
+.hl{background:#fff2a8}
+</style>
+<h1>Notes redesign: 3 directions + suggested features</h1>
+<p class=s>You had no specific ideas, so these are suggestions based on what Notes already has (pin, tags, outline, backlinks, wiki links, ⌘K, 4 editor modes). Same content in all three, only the structure changes.</p>
+<h2>A · Library (3 panes, Apple Notes / Bear style)</h2>
+<p class=r>Sidebar of smart views + tags + folders, then a list grouped by date (Pinned / Today / Earlier) with snippet and tag chips, then the editor with a property line (tags, edited time, word count).</p>
+<ul class=f><li>Best for: browsing lots of notes by tag or date.</li><li>Cost: three columns eat width; the editor is narrower.</li></ul><div class="win"><div class="pane side"><div class="nav" style="font-weight:700;margin-bottom:6px">📓 Notes</div><div class="nav on">▤ All notes<b>24</b></div><div class="nav ">★ Pinned<b>3</b></div><div class="nav ">◷ Recent<b></b></div><div class="nav ">✎ Untitled / inbox<b>2</b></div><h5>Tags</h5><div class="nav">#kafka<b>6</b></div><div class="nav">#alloydb<b>4</b></div><div class="nav">#runbook<b>5</b></div><div class="nav">#meeting<b>7</b></div><h5>Folders</h5><div class="nav">▸ work</div><div class="nav">▸ personal</div></div><div class="pane list"><div class="srch"><span>⌕ Search notes</span><kbd>⌘K</kbd></div>
+<div class="grp">📌 Pinned</div><div class="it on"><b>Kafka reauth runbook</b><span>Run gcloud compute start-iap-tunnel then enter…</span><div class="tg"><i class=tag>#kafka</i><i class=tag>#runbook</i></div></div><div class="it "><b>AlloyDB proxy ports</b><span>5432 → 15432 via cloud-sql-proxy</span><div class="tg"><i class=tag>#alloydb</i></div></div>
+<div class="grp">Today</div><div class="it "><b>Standup 22 Nov</b><span>Blocked on topic ACL for payments…</span><div class="tg"><i class=tag>#meeting</i></div></div>
+<div class="grp">Earlier</div><div class="it "><b>Postgres tips</b><span>vacuum analyze before bulk insert…</span><div class="tg"><i class=tag>#alloydb</i></div></div><div class="it "><b>Release checklist</b><span>1. Tag  2. Build  3. Notes</span><div class="tg"><i class=tag>#runbook</i></div></div></div><div class="main"><div class="tbar"><b style="color:#111">Kafka reauth runbook</b><span class="sp"></span>📌 <div class="seg"><span class="on">Page</span><span>Preview</span><span>Markdown</span><span>Split</span></div><span>● Saved</span></div><div class="doc"><h1>Kafka reauth runbook</h1><div class="props"><i class="tag">#kafka</i><i class="tag">#runbook</i><span>· Edited 2 min ago · 412 words</span></div>
+<p>When the tunnel asks for re-authentication, run the command below and enter the work password.</p><pre>gcloud compute start-iap-tunnel kafka-1 9092 --local-host-port=localhost:9092</pre>
+<h3>If it keeps failing</h3><p>Check <span class="wl">[[AlloyDB proxy ports]]</span> for port clashes, then restart the tunnel from Connections.</p></div></div></div>
+<h2>B · Workspace (tabs + inspector, VS Code / Obsidian style)</h2>
+<p class=r>Slim jump list, multiple notes open as tabs, a right inspector (outline, linked from, links to, properties), status bar with word count and back/forward.</p>
+<ul class=f><li>Best for: runbooks that cross-link each other and that you keep open side by side.</li><li>Cost: more chrome; inspector can be toggled off.</li></ul><div class="win"><div class="pane side" style="width:170px"><div class="srch" style="margin:0 0 8px"><span>⌕ Jump to…</span><kbd>⌘K</kbd></div><h5>Pinned</h5><div class="nav on">Kafka reauth runbook</div><div class="nav">AlloyDB proxy ports</div><h5>Recent</h5><div class="nav">Standup 22 Nov</div><div class="nav">Postgres tips</div><div class="nav">Release checklist</div><h5>Tags</h5><div class="nav">#kafka<b>6</b></div><div class="nav">#runbook<b>5</b></div></div><div class="main"><div class="tabs"><div class="tab on">Kafka reauth runbook <i>×</i></div><div class="tab">AlloyDB proxy ports <i>×</i></div><div class="tab">Standup 22 Nov <i>×</i></div><div class="tab" style="background:none">＋</div></div><div class="tbar"><b style="color:#111">Kafka reauth runbook</b><span class="sp"></span>📌 <div class="seg"><span class="on">Page</span><span>Preview</span><span>Markdown</span><span>Split</span></div><span>● Saved</span></div><div style="display:flex;flex:1;min-height:0"><div class="doc"><h1>Kafka reauth runbook</h1><div class="props"><i class="tag">#kafka</i><i class="tag">#runbook</i><span>· Edited 2 min ago · 412 words</span></div>
+<p>When the tunnel asks for re-authentication, run the command below and enter the work password.</p><pre>gcloud compute start-iap-tunnel kafka-1 9092 --local-host-port=localhost:9092</pre>
+<h3>If it keeps failing</h3><p>Check <span class="wl">[[AlloyDB proxy ports]]</span> for port clashes, then restart the tunnel from Connections.</p></div><span style="flex:1"></span></div><div class="status"><span>● Saved 10:01</span><span>412 words</span><span>2 backlinks</span><span style="margin-left:auto">⌘[ ⌘] back / forward · ⌘W close tab</span></div></div><div class="pane right"><h5>Outline</h5><div class="o on">Kafka reauth runbook</div><div class="o l2">If it keeps failing</div>
+<h5>Linked from (2)</h5><div class="o">Standup 22 Nov</div><div class="o">Release checklist</div>
+<h5>Links to (1)</h5><div class="o"><span class="wl">AlloyDB proxy ports</span></div>
+<h5>Properties</h5><div class="o mut">Created 12 Nov</div><div class="o mut">412 words · 2 min read</div><div class="o mut">~/notes/kafka-reauth.md</div></div></div>
+<h2>C · Gallery (cards, Notion / Craft style)</h2>
+<p class=r>Pinned strip on top, a card grid with preview text, tag filter chips, toggle Gallery / List. Click a card to open the page full width, with a back button.</p>
+<ul class=f><li>Best for: rediscovering notes visually.</li><li>Cost: slower to scan 100+ notes; editing is a separate full-screen page.</li></ul><div class="win"><div class="main"><div class="tbar"><b style="color:#111;font-size:16px">Notes</b><div class="srch" style="margin:0;width:300px"><span>⌕ Search or filter</span><kbd>⌘K</kbd></div><span class="tag">#kafka ×</span><span class="sp"></span><div class="seg"><span class="on">▦ Gallery</span><span>☰ List</span></div><span class="btn" style="background:#0a7aff;color:#fff;border-radius:7px;padding:4px 10px">+ New</span></div>
+<div class="pinrow"><div class="pin"><b>📌 Kafka reauth runbook</b><div class="mut s11">Edited 2 min ago</div></div><div class="pin"><b>📌 AlloyDB proxy ports</b><div class="mut s11">Yesterday</div></div><div class="pin"><b>📌 Release checklist</b><div class="mut s11">Mon</div></div></div>
+<div class="grid"><div class="cardn"><b>Standup 22 Nov</b><p>Blocked on topic ACL for payments. Ask Lan about the contract…</p><div class="tg" style="display:flex;gap:4px"><i class=tag>#meeting</i></div></div><div class="cardn"><b>Postgres tips</b><p>vacuum analyze before bulk insert. Prefer COPY for large loads…</p><div class="tg" style="display:flex;gap:4px"><i class=tag>#alloydb</i></div></div><div class="cardn"><b>Incident 14 Nov</b><p>Timeline: 09:02 alert fired, 09:10 rollback…</p><div class="tg" style="display:flex;gap:4px"><i class=tag>#runbook</i></div></div><div class="cardn"><b>Kafka consumer lag</b><p>Check group offsets with kafka-consumer-groups…</p><div class="tg" style="display:flex;gap:4px"><i class=tag>#kafka</i></div></div><div class="cardn"><b>Da Lat trip</b><p>Hotel list, budget, flights…</p><div class="tg" style="display:flex;gap:4px"><i class=tag>#personal</i></div></div><div class="cardn"><b>Daily 21 Nov</b><p>Reviewed PRs, paired on proxy fix…</p><div class="tg" style="display:flex;gap:4px"><i class=tag>#meeting</i></div></div></div></div></div>
+<h1>Suggested in any direction</h1>
+<ul class=f style="font-size:13px"><li><b>1. Better ⌘K:</b> results split into Notes / Inside notes (with highlighted line) / Actions, "New note from query" as the last row (mock below).</li>
+<li><b>2. Recent + back/forward:</b> ⌘[ and ⌘] to jump through notes you visited.</li>
+<li><b>3. Inspector:</b> outline, backlinks, links-to, word count in one place.</li>
+<li><b>4. Daily note:</b> one key creates "Daily 22 Nov" from a template.</li>
+<li><b>5. Templates:</b> runbook, meeting, incident, from the "+" menu.</li></ul>
+<div class="win cmd"><div class="pane side"><div class="nav" style="font-weight:700;margin-bottom:6px">📓 Notes</div><div class="nav on">▤ All notes<b>24</b></div><div class="nav ">★ Pinned<b>3</b></div><div class="nav ">◷ Recent<b></b></div><div class="nav ">✎ Untitled / inbox<b>2</b></div><h5>Tags</h5><div class="nav">#kafka<b>6</b></div><div class="nav">#alloydb<b>4</b></div><div class="nav">#runbook<b>5</b></div><div class="nav">#meeting<b>7</b></div><h5>Folders</h5><div class="nav">▸ work</div><div class="nav">▸ personal</div></div><div class="pane list"><div class="srch"><span>⌕ Search notes</span><kbd>⌘K</kbd></div>
+<div class="grp">📌 Pinned</div><div class="it on"><b>Kafka reauth runbook</b><span>Run gcloud compute start-iap-tunnel then enter…</span><div class="tg"><i class=tag>#kafka</i><i class=tag>#runbook</i></div></div><div class="it "><b>AlloyDB proxy ports</b><span>5432 → 15432 via cloud-sql-proxy</span><div class="tg"><i class=tag>#alloydb</i></div></div>
+<div class="grp">Today</div><div class="it "><b>Standup 22 Nov</b><span>Blocked on topic ACL for payments…</span><div class="tg"><i class=tag>#meeting</i></div></div>
+<div class="grp">Earlier</div><div class="it "><b>Postgres tips</b><span>vacuum analyze before bulk insert…</span><div class="tg"><i class=tag>#alloydb</i></div></div><div class="it "><b>Release checklist</b><span>1. Tag  2. Build  3. Notes</span><div class="tg"><i class=tag>#runbook</i></div></div></div><div class="main"><div class="tbar"><b style="color:#111">Kafka reauth runbook</b><span class="sp"></span>📌 <div class="seg"><span class="on">Page</span><span>Preview</span><span>Markdown</span><span>Split</span></div><span>● Saved</span></div><div class="doc"><h1>Kafka reauth runbook</h1><div class="props"><i class="tag">#kafka</i><i class="tag">#runbook</i><span>· Edited 2 min ago · 412 words</span></div>
+<p>When the tunnel asks for re-authentication, run the command below and enter the work password.</p><pre>gcloud compute start-iap-tunnel kafka-1 9092 --local-host-port=localhost:9092</pre>
+<h3>If it keeps failing</h3><p>Check <span class="wl">[[AlloyDB proxy ports]]</span> for port clashes, then restart the tunnel from Connections.</p></div></div>
+<div class="pal"><div class="q">kafka re<span class="mut">|</span></div>
+<div class="grp" style="padding-left:10px">Notes · 2</div><div class="r on"><span>📄 <b>Kafka</b> <b>re</b>auth runbook</span><span class="mut">#runbook</span></div><div class="r"><span>📄 Kafka consumer lag</span><span class="mut">#kafka</span></div>
+<div class="grp" style="padding-left:10px">Inside notes · 3</div><div class="r"><span>… when the tunnel asks for <span class="hl">re</span>-authentication…</span><span class="mut">Kafka reauth runbook</span></div><div class="r"><span>… <span class="hl">re</span>start the tunnel from Connections</span><span class="mut">Standup 22 Nov</span></div>
+<div class="grp" style="padding-left:10px">Actions</div><div class="r"><span>＋ New note "kafka re"</span><span class="mut">↵</span></div></div></div>

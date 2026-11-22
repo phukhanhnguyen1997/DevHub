@@ -9,7 +9,7 @@ SwiftPM executable `DevHub`, sources in `Sources/DevHub/`.
 | `Models.swift` | `Profile`, `RunState`, JSON store, Keychain `Vault`, `shell()` |
 | `ConnectionManager.swift` | Process/PTY core, re-auth, auto-start, recover, gcloud auth check |
 | `ConnectionsView.swift` | Profile list/editor, auth banner, copy-connection menu |
-| `NotesStore.swift` / `NotesView.swift` | SQLite FTS5 index, tags, backlinks, UI, Cmd+K `PaletteView` |
+| `NotesStore.swift` / `NotesView.swift` | SQLite FTS5 index, tags, backlinks, tabs + inspector UI, grouped Cmd+K `PaletteView` |
 | `Markdown.swift` / `BlockEditor.swift` | Markdown renderer; block editor (`SegCodec`) |
 | `DataViews.swift` | DB Query, Ports, Vault views |
 | `Shortcuts.swift` | `ShortcutStore` (UserDefaults `shortcutMap.v1`), key recorder, Settings view |

@@ -134,6 +134,23 @@ final class NotesStore: ObservableObject {
         return out
     }
 
+    /// Targets of `[[wiki links]]` in a note body, in order, without duplicates.
+    nonisolated static func wikiLinks(_ body: String) -> [String] {
+        guard let re = try? NSRegularExpression(pattern: "\\[\\[([^\\]|]+)(?:\\|[^\\]]*)?\\]\\]") else { return [] }
+        var out: [String] = []
+        for m in re.matches(in: body, range: NSRange(body.startIndex..., in: body)) {
+            if let r = Range(m.range(at: 1), in: body) {
+                let n = body[r].trimmingCharacters(in: .whitespaces)
+                if !n.isEmpty, !out.contains(n) { out.append(n) }
+            }
+        }
+        return out
+    }
+
+    nonisolated static func wordCount(_ body: String) -> Int {
+        body.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+    }
+
     var allTags: [String] { Array(Set(all.flatMap(\.tags))).sorted() }
 
     /// Resolves a `[[wiki link]]` target by title or file name.

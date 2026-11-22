@@ -148,6 +148,11 @@ func timestamp() {
 }
 
 segCodecRoundTrip(); markdownBlocks(); readOnlyGuard(); diffMarksChangedLine(); cron()
+func noteLinks() {
+    check(NotesStore.wikiLinks("see [[A b]] and [[C|alias]], again [[A b]] and [[ ]]") == ["A b", "C"], "wiki links parsed, deduped")
+    check(NotesStore.wordCount("one two\n three") == 3, "word count")
+}
+
 func dueDates() {
     let cal = Calendar.current
     let today = cal.startOfDay(for: Date())
@@ -168,6 +173,6 @@ func dueDates() {
     let month = calendarDays(anchor: Date(), week: false)
     check(month.count % 7 == 0 && month.count >= 28, "calendar: month grid is whole weeks")
 }
-cronNL(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
+cronNL(); noteLinks(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
