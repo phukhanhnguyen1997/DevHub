@@ -4,6 +4,8 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
+- Go menu with shortcuts: ⌘1–⌘8 for tabs, ⌃⌘1–⌃⌘9 for the first nine tools.
+
 - Todos tab: todo list stored permanently in SQLite (`todos.sqlite`), soft delete + trash, Done log by day, Activity log, search and date-range filter.
 
 ## v0.1.0

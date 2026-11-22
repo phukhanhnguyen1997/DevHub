@@ -38,6 +38,17 @@ struct DevHubApp: App {
                 Button("Command Palette") { app.showPalette = true }
                     .keyboardShortcut("k", modifiers: .command)
             }
+            CommandMenu("Go") {
+                ForEach(Array(Tab.allCases.enumerated()), id: \.element) { i, t in
+                    Button(t.rawValue) { app.tab = t }
+                        .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
+                }
+                Divider()
+                ForEach(Array(ToolKind.allCases.prefix(9).enumerated()), id: \.element) { i, k in
+                    Button("Tool: \(k.rawValue)") { app.tab = .tools; app.toolKind = k }
+                        .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: [.command, .control])
+                }
+            }
         }
 
         MenuBarExtra {
