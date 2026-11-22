@@ -5,7 +5,7 @@ Native macOS (SwiftUI) developer utility: tunnel manager, markdown notes with Cm
 ## Features
 - **Connections**: manage `cloud-sql-proxy` / `gcloud compute start-iap-tunnel` commands; connect/disconnect per profile or group; status, logs, port-conflict detection; auto re-auth (password from Keychain injected via PTY, global Google work password via the shield button, auto `gcloud auth login` on expiry); auto-start, restore last session, recover after wake/network change; gcloud/ADC expiry banner; import/export profiles; copy connection strings.
 - **Notes**: Notion-style Page editor (`/` menu, live styling, 5s autosave), import/create `.md`, FTS5 search, tags, pin, outline, `[[wiki links]]`, backlinks, block-based editor, "Make profile" from shell code blocks.
-- **Todos**: todo list with priority and due date, permanent SQLite storage (`todos.sqlite`, soft delete only), Done log grouped by day, full Activity log, search and date-range filter (today to all time, or custom).
+- **Todos**: todo list with a detail modal (title, description, checklist of sub-items with progress), priority and due date, permanent SQLite storage (`todos.sqlite`, soft delete only), Done log grouped by day, full Activity log, search and date-range filter (today to all time, or custom).
 - **Clipboard**: SQLite-backed history (text, images, files), filter by type (Text/Image/File/Link/Email/Color), retention 1d/3d/7d/14d/1 month (pinned kept), pin, search, sensitive content masked.
 - **DB Query**: read-only psql/mysql queries, saved queries.
 - **Ports / Vault**: listening ports; Keychain-backed secrets.

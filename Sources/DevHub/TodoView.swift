@@ -12,6 +12,14 @@ struct TodoItem: Identifiable, Equatable {
     var deleted: Bool
 }
 
+struct SubDraft: Identifiable, Equatable {
+    var uid = UUID()
+    var id: UUID { uid }
+    var dbId: Int64?
+    var title: String
+    var done: Bool
+}
+
 struct TodoEvent: Identifiable {
     var id: Int64
     var todoId: Int64
@@ -25,12 +33,14 @@ struct TodoEvent: Identifiable {
 final class TodoStore: ObservableObject {
     @Published var items: [TodoItem] = []
     @Published var events: [TodoEvent] = []
+    @Published var subs: [Int64: [SubDraft]] = [:]
     private var db: OpaquePointer?
 
     init() {
         sqlite3_open(Store.dir.appendingPathComponent("todos.sqlite").path, &db)
         run("CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', priority INTEGER NOT NULL DEFAULT 0, due REAL, created REAL NOT NULL, done REAL, deleted INTEGER NOT NULL DEFAULT 0)")
         run("CREATE TABLE IF NOT EXISTS todo_log (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, action TEXT NOT NULL, title TEXT NOT NULL, date REAL NOT NULL)")
+        run("CREATE TABLE IF NOT EXISTS todo_subs (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, pos INTEGER NOT NULL DEFAULT 0)")
         run("CREATE INDEX IF NOT EXISTS idx_log_date ON todo_log(date)")
         reload()
     }
@@ -83,6 +93,58 @@ final class TodoStore: ObservableObject {
         }
         sqlite3_finalize(s2)
         events = ev
+        var sm: [Int64: [SubDraft]] = [:]
+        var s3: OpaquePointer?
+        if sqlite3_prepare_v2(db, "SELECT id, todo_id, title, done FROM todo_subs ORDER BY todo_id, pos, id", -1, &s3, nil) == SQLITE_OK {
+            while sqlite3_step(s3) == SQLITE_ROW {
+                sm[sqlite3_column_int64(s3, 1), default: []].append(SubDraft(dbId: sqlite3_column_int64(s3, 0), title: text(s3, 2), done: sqlite3_column_int(s3, 3) != 0))
+            }
+        }
+        sqlite3_finalize(s3)
+        subs = sm
+    }
+
+    // Creates (id == 0) or updates a todo together with its sub-items; every change is logged.
+    func save(_ item: TodoItem, subs drafts: [SubDraft]) {
+        var i = item
+        let t = i.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        i.title = t
+        let old = i.id == 0 ? [] : (subs[i.id] ?? [])
+        if i.id == 0 {
+            run("INSERT INTO todos (title, detail, priority, due, created, done) VALUES (?, ?, ?, ?, ?, ?)",
+                [t, i.detail, i.priority, i.due?.timeIntervalSince1970, Date().timeIntervalSince1970, i.done?.timeIntervalSince1970])
+            i.id = sqlite3_last_insert_rowid(db)
+            log(i.id, "created", t)
+        } else {
+            let prev = items.first { $0.id == i.id }
+            run("UPDATE todos SET title = ?, detail = ?, priority = ?, due = ?, done = ? WHERE id = ?",
+                [t, i.detail, i.priority, i.due?.timeIntervalSince1970, i.done?.timeIntervalSince1970, i.id])
+            if prev?.done == nil && i.done != nil { log(i.id, "completed", t) }
+            else if prev?.done != nil && i.done == nil { log(i.id, "reopened", t) }
+            if prev?.title != t || prev?.detail != i.detail || prev?.priority != i.priority || prev?.due != i.due || old.count != drafts.count { log(i.id, "edited", t) }
+        }
+        for d in drafts {
+            let was = old.first { $0.dbId != nil && $0.dbId == d.dbId }
+            if d.done && was?.done != true { log(i.id, "subtask done", "\(t) › \(d.title)") }
+            else if !d.done && was?.done == true { log(i.id, "subtask reopened", "\(t) › \(d.title)") }
+        }
+        run("DELETE FROM todo_subs WHERE todo_id = ?", [i.id])
+        for (n, d) in drafts.enumerated() where !d.title.trimmingCharacters(in: .whitespaces).isEmpty {
+            if let id = d.dbId {
+                run("INSERT INTO todo_subs (id, todo_id, title, done, pos) VALUES (?, ?, ?, ?, ?)", [id, i.id, d.title, d.done ? 1 : 0, n])
+            } else {
+                run("INSERT INTO todo_subs (todo_id, title, done, pos) VALUES (?, ?, ?, ?)", [i.id, d.title, d.done ? 1 : 0, n])
+            }
+        }
+        reload()
+    }
+
+    func toggleSub(_ todo: TodoItem, _ sub: SubDraft) {
+        guard let id = sub.dbId else { return }
+        run("UPDATE todo_subs SET done = ? WHERE id = ?", [sub.done ? 0 : 1, id])
+        log(todo.id, sub.done ? "subtask reopened" : "subtask done", "\(todo.title) › \(sub.title)")
+        reload()
     }
 
     private func log(_ id: Int64, _ action: String, _ title: String) {
@@ -159,24 +221,26 @@ struct TodoView: View {
     @State private var newPriority = 0
     @State private var newDue: Date?
     @State private var editing: TodoItem?
+    @State private var creating = false
 
     func inRange(_ d: Date) -> Bool {
         guard let b = range.bounds(from: from, to: to) else { return true }
         return d >= b.0 && d < b.1
     }
-    func matches(_ t: String, _ d: String) -> Bool {
+    func matches(_ t: String, _ d: String, _ id: Int64? = nil) -> Bool {
         query.isEmpty || t.localizedCaseInsensitiveContains(query) || d.localizedCaseInsensitiveContains(query)
+            || (id.map { store.subs[$0]?.contains { $0.title.localizedCaseInsensitiveContains(query) } ?? false } ?? false)
     }
 
     var active: [TodoItem] {
-        store.items.filter { !$0.deleted && $0.done == nil && matches($0.title, $0.detail) && inRange($0.created) }
+        store.items.filter { !$0.deleted && $0.done == nil && matches($0.title, $0.detail, $0.id) && inRange($0.created) }
             .sorted { ($0.priority, $1.due ?? .distantFuture) > ($1.priority, $0.due ?? .distantFuture) }
     }
     var doneItems: [TodoItem] {
-        store.items.filter { !$0.deleted && $0.done != nil && matches($0.title, $0.detail) && inRange($0.done!) }
+        store.items.filter { !$0.deleted && $0.done != nil && matches($0.title, $0.detail, $0.id) && inRange($0.done!) }
             .sorted { $0.done! > $1.done! }
     }
-    var trash: [TodoItem] { store.items.filter { $0.deleted && matches($0.title, $0.detail) } }
+    var trash: [TodoItem] { store.items.filter { $0.deleted && matches($0.title, $0.detail, $0.id) } }
     var history: [TodoEvent] { store.events.filter { matches($0.title, $0.action) && inRange($0.date) } }
 
     var body: some View {
@@ -203,7 +267,12 @@ struct TodoView: View {
                 Spacer()
             }.padding(8)
         }
-        .sheet(item: $editing) { item in TodoEditor(item: item) { store.update($0) } }
+        .sheet(item: $editing) { item in TodoModal(item: item, subs: store.subs[item.id] ?? []) { store.save($0, subs: $1) } }
+        .sheet(isPresented: $creating) {
+            TodoModal(item: TodoItem(id: 0, title: newTitle, detail: "", priority: newPriority, due: newDue, created: Date(), done: nil, deleted: false), subs: []) {
+                store.save($0, subs: $1); newTitle = ""; newPriority = 0; newDue = nil
+            }
+        }
     }
 
     var addBar: some View {
@@ -219,6 +288,7 @@ struct TodoView: View {
                 Button("Due date") { newDue = Date() }
             }
             Button("Add", action: add).disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button { creating = true } label: { Label("New…", systemImage: "square.and.pencil") }.help("Open the full todo form with description and sub-items")
         }.padding(10)
     }
 
@@ -271,7 +341,7 @@ struct TodoView: View {
                 List(history) { e in
                     HStack {
                         Image(systemName: icon(e.action)).foregroundStyle(color(e.action)).frame(width: 20)
-                        Text(e.action.capitalized).frame(width: 80, alignment: .leading).foregroundStyle(.secondary)
+                        Text(e.action.capitalized).frame(width: 120, alignment: .leading).foregroundStyle(.secondary)
                         Text(e.title).lineLimit(2)
                         Spacer()
                         Text(e.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
@@ -287,12 +357,14 @@ struct TodoView: View {
         case "completed": return "checkmark.circle.fill"
         case "reopened": return "arrow.uturn.backward.circle"
         case "deleted": return "trash"
+        case "subtask done": return "checkmark.square.fill"
+        case "subtask reopened": return "square"
         case "restored": return "arrow.uturn.up.circle"
         default: return "pencil.circle"
         }
     }
     func color(_ a: String) -> Color {
-        switch a { case "completed": return .green; case "deleted": return .red; case "created": return .blue; default: return .secondary }
+        switch a { case "completed", "subtask done": return .green; case "deleted": return .red; case "created": return .blue; default: return .secondary }
     }
 
     func row(_ i: TodoItem) -> some View {
@@ -309,6 +381,19 @@ struct TodoView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(i.title).strikethrough(i.done != nil).foregroundStyle(i.done != nil ? .secondary : .primary)
                 if !i.detail.isEmpty { Text(i.detail).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
+                if let ss = store.subs[i.id], !ss.isEmpty {
+                    let n = ss.filter(\.done).count
+                    ProgressView(value: Double(n), total: Double(ss.count)).frame(width: 160)
+                    ForEach(ss.prefix(4)) { sub in
+                        HStack(spacing: 6) {
+                            Button { store.toggleSub(i, sub) } label: { Image(systemName: sub.done ? "checkmark.square.fill" : "square").foregroundStyle(sub.done ? Color.green : Color.secondary) }
+                                .buttonStyle(.plain).disabled(i.deleted)
+                            Text(sub.title).font(.caption).strikethrough(sub.done).foregroundStyle(sub.done ? .secondary : .primary)
+                        }
+                    }
+                    if ss.count > 4 { Text("+\(ss.count - 4) more · \(n)/\(ss.count) done").font(.caption2).foregroundStyle(.secondary) }
+                    else { Text("\(n)/\(ss.count) done").font(.caption2).foregroundStyle(.secondary) }
+                }
                 HStack(spacing: 8) {
                     if i.priority > 0 {
                         Text(["", "Low", "Medium", "High"][i.priority]).font(.caption2.bold())
@@ -333,41 +418,93 @@ struct TodoView: View {
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+        .onTapGesture(count: 2) { if !i.deleted { editing = i } }
     }
 }
 
-struct TodoEditor: View {
+struct TodoModal: View {
     @Environment(\.dismiss) var dismiss
     @State var item: TodoItem
+    @State private var subs: [SubDraft]
     @State private var hasDue: Bool
-    var onSave: (TodoItem) -> Void
+    @State private var newSub = ""
+    @FocusState private var subFocus: Bool
+    var onSave: (TodoItem, [SubDraft]) -> Void
 
-    init(item: TodoItem, onSave: @escaping (TodoItem) -> Void) {
+    init(item: TodoItem, subs: [SubDraft], onSave: @escaping (TodoItem, [SubDraft]) -> Void) {
         _item = State(initialValue: item)
+        _subs = State(initialValue: subs)
         _hasDue = State(initialValue: item.due != nil)
         self.onSave = onSave
     }
 
+    var isNew: Bool { item.id == 0 }
+
+    func addSub() {
+        let t = newSub.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        subs.append(SubDraft(dbId: nil, title: t, done: false))
+        newSub = ""; subFocus = true
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Edit todo").font(.headline)
-            TextField("Title", text: $item.title).textFieldStyle(.roundedBorder)
-            TextEditor(text: $item.detail).frame(height: 90).border(Color.secondary.opacity(0.3))
+            HStack {
+                Text(isNew ? "New todo" : "Todo").font(.headline)
+                Spacer()
+                if !isNew {
+                    Toggle("Done", isOn: Binding(get: { item.done != nil }, set: { item.done = $0 ? (item.done ?? Date()) : nil }))
+                        .toggleStyle(.checkbox)
+                }
+            }
+            TextField("Title", text: $item.title).textFieldStyle(.roundedBorder).font(.title3)
+            Text("Description").font(.caption).foregroundStyle(.secondary)
+            TextEditor(text: $item.detail).font(.body).frame(height: 90)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+            HStack {
+                Text("Sub-items").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if !subs.isEmpty { Text("\(subs.filter(\.done).count)/\(subs.count) done").font(.caption).foregroundStyle(.secondary) }
+            }
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach($subs) { $sub in
+                        HStack {
+                            Toggle("", isOn: $sub.done).toggleStyle(.checkbox).labelsHidden()
+                            TextField("Sub-item", text: $sub.title).textFieldStyle(.plain)
+                                .strikethrough(sub.done).foregroundStyle(sub.done ? .secondary : .primary)
+                            Button { subs.removeAll { $0.uid == sub.uid } } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
+                        }
+                    }
+                }.padding(6)
+            }
+            .frame(minHeight: 60, maxHeight: 180)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+            HStack {
+                TextField("Add a sub-item and press Return", text: $newSub).textFieldStyle(.roundedBorder)
+                    .focused($subFocus).onSubmit(addSub)
+                Button("Add", action: addSub).disabled(newSub.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
             Picker("Priority", selection: $item.priority) {
                 Text("None").tag(0); Text("Low").tag(1); Text("Medium").tag(2); Text("High").tag(3)
             }.pickerStyle(.segmented)
-            Toggle("Due date", isOn: $hasDue)
-            if hasDue {
-                DatePicker("", selection: Binding(get: { item.due ?? Date() }, set: { item.due = $0 }), displayedComponents: .date).labelsHidden()
+            HStack {
+                Toggle("Due date", isOn: $hasDue)
+                if hasDue {
+                    DatePicker("", selection: Binding(get: { item.due ?? Date() }, set: { item.due = $0 }), displayedComponents: .date).labelsHidden()
+                }
             }
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") {
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(isNew ? "Create" : "Save") {
                     if !hasDue { item.due = nil } else if item.due == nil { item.due = Date() }
-                    onSave(item); dismiss()
-                }.keyboardShortcut(.defaultAction).disabled(item.title.trimmingCharacters(in: .whitespaces).isEmpty)
+                    onSave(item, subs); dismiss()
+                }.keyboardShortcut(.return, modifiers: .command).buttonStyle(.borderedProminent)
+                    .disabled(item.title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-        }.padding(20).frame(width: 440)
+            Text("⌘Return to save · double-click a todo to open it").font(.caption2).foregroundStyle(.secondary)
+        }.padding(20).frame(width: 520)
     }
 }

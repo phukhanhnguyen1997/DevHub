@@ -4,6 +4,8 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
+- Todos: "New…" / double-click opens a modal with title, description, sub-item checklist, priority, due date and done flag. Sub-items are stored in `todo_subs`, shown with progress on each row, searchable, and sub-item completions are written to the Activity log.
+
 - Settings (⌘,): record custom shortcuts for every tab and tool, number tabs by sidebar order, reset. Sidebar tabs can be reordered by drag and drop (persisted).
 
 - Go menu with shortcuts: ⌘1–⌘8 for tabs, ⌃⌘1–⌃⌘9 for the first nine tools.
