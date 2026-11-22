@@ -253,6 +253,126 @@ enum TodoRange: String, CaseIterable, Identifiable {
     }
 }
 
+// A due date counts as "timed" unless it sits exactly at midnight.
+func dueHasTime(_ d: Date) -> Bool { d != Calendar.current.startOfDay(for: d) }
+
+func isOverdue(_ d: Date) -> Bool {
+    dueHasTime(d) ? d < Date() : d < Calendar.current.startOfDay(for: Date())
+}
+
+func dueLabel(_ d: Date) -> String {
+    let cal = Calendar.current
+    let days = cal.dateComponents([.day], from: cal.startOfDay(for: Date()), to: cal.startOfDay(for: d)).day ?? 0
+    let rel: String
+    switch days {
+    case 0: rel = "Today"
+    case 1: rel = "Tomorrow"
+    case -1: rel = "Yesterday"
+    case 2...6: rel = d.formatted(.dateTime.weekday(.wide))
+    case ..<(-1): rel = "\(-days) days overdue"
+    default: rel = "In \(days) days"
+    }
+    var s = "\(rel) · \(d.formatted(.dateTime.day().month(.abbreviated)))"
+    if dueHasTime(d) { s += ", \(d.formatted(date: .omitted, time: .shortened))" }
+    return s
+}
+
+struct DueDateButton: View {
+    @Binding var due: Date?
+    @State private var open = false
+
+    var body: some View {
+        Button { open = true } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "calendar")
+                Text(due.map(dueLabel) ?? "Set due date")
+                if due != nil {
+                    Button { due = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.buttonStyle(.plain)
+                }
+            }
+            .font(.callout.weight(.medium))
+            .foregroundStyle(due.map { isOverdue($0) ? Color.red : Color.accentColor } ?? Color.secondary)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 8).fill((due.map { isOverdue($0) ? Color.red : Color.accentColor } ?? Color.primary).opacity(0.1)))
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $open, arrowEdge: .bottom) { DuePopover(due: $due, close: { open = false }) }
+    }
+}
+
+struct DuePopover: View {
+    @Binding var due: Date?
+    var close: () -> Void
+    @State private var date: Date
+    @State private var withTime: Bool
+
+    init(due: Binding<Date?>, close: @escaping () -> Void) {
+        _due = due
+        self.close = close
+        let d = due.wrappedValue ?? Calendar.current.startOfDay(for: Date())
+        _date = State(initialValue: d)
+        _withTime = State(initialValue: dueHasTime(d))
+    }
+
+    func day(_ offset: Int) -> Date {
+        let cal = Calendar.current
+        return cal.date(byAdding: .day, value: offset, to: cal.startOfDay(for: Date()))!
+    }
+    func nextMonday() -> Date {
+        let cal = Calendar.current
+        let w = cal.component(.weekday, from: Date()) // 1 = Sunday
+        return day((9 - w) % 7 == 0 ? 7 : (9 - w) % 7)
+    }
+
+    // Keeps the chosen time of day when jumping to another day.
+    func jump(_ d: Date) {
+        let cal = Calendar.current
+        if withTime {
+            let t = cal.dateComponents([.hour, .minute], from: date)
+            date = cal.date(bySettingHour: t.hour ?? 9, minute: t.minute ?? 0, second: 0, of: d) ?? d
+        } else { date = d }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                quick("Today", day(0)); quick("Tomorrow", day(1)); quick("Next week", nextMonday()); quick("Next month", Calendar.current.date(byAdding: .month, value: 1, to: day(0))!)
+            }
+            DatePicker("", selection: Binding(get: { date }, set: { newValue in jump(newValue) }), displayedComponents: .date)
+                .datePickerStyle(.graphical).labelsHidden()
+            Divider()
+            HStack {
+                Toggle("Time", isOn: $withTime.animation()).toggleStyle(.switch)
+                    .onChange(of: withTime) { _, on in
+                        let cal = Calendar.current
+                        date = on ? (cal.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date) : cal.startOfDay(for: date)
+                    }
+                if withTime {
+                    DatePicker("", selection: $date, displayedComponents: .hourAndMinute).labelsHidden()
+                }
+                Spacer()
+            }
+            HStack {
+                Button("Clear") { due = nil; close() }.foregroundStyle(.red)
+                Spacer()
+                Button("Cancel") { close() }.keyboardShortcut(.cancelAction)
+                Button("Set due date") { due = date; close() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16).frame(width: 300)
+    }
+
+    func quick(_ title: String, _ d: Date) -> some View {
+        let selected = Calendar.current.isDate(date, inSameDayAs: d)
+        return Button { jump(d) } label: {
+            Text(title).font(.caption.weight(.medium)).lineLimit(1)
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background(Capsule().fill(selected ? Color.accentColor : Color.primary.opacity(0.08)))
+                .foregroundStyle(selected ? Color.white : Color.primary)
+        }.buttonStyle(.plain)
+    }
+}
+
 private let priorityNames = ["None", "Low", "Medium", "High"]
 private let priorityColors: [Color] = [.gray, .blue, .orange, .red]
 
@@ -300,8 +420,7 @@ struct TodoView: View {
 
     var openCount: Int { store.items.filter { !$0.deleted && $0.done == nil }.count }
     var overdueCount: Int {
-        let start = Calendar.current.startOfDay(for: Date())
-        return store.items.filter { !$0.deleted && $0.done == nil && ($0.due ?? .distantFuture) < start }.count
+        store.items.filter { !$0.deleted && $0.done == nil && ($0.due.map(isOverdue) ?? false) }.count
     }
     var doneToday: Int {
         let start = Calendar.current.startOfDay(for: Date())
@@ -478,7 +597,7 @@ struct TodoView: View {
     func card(_ i: TodoItem) -> some View {
         let subs = store.subs[i.id] ?? []
         let p = subProgress(subs)
-        let overdue = i.done == nil && (i.due.map { $0 < Calendar.current.startOfDay(for: Date()) } ?? false)
+        let overdue = i.done == nil && (i.due.map(isOverdue) ?? false)
         let canDone = store.canComplete(i.id)
         return HStack(alignment: .top, spacing: 0) {
             RoundedRectangle(cornerRadius: 2).fill(i.priority == 0 ? Color.clear : priorityColors[i.priority]).frame(width: 4)
@@ -534,7 +653,7 @@ struct TodoView: View {
                     }
                     HStack(spacing: 8) {
                         if i.priority > 0 { chip(priorityNames[i.priority], "flag.fill", priorityColors[i.priority]) }
-                        if let d = i.due { chip(d.formatted(date: .abbreviated, time: .omitted), "calendar", overdue ? .red : .secondary) }
+                        if let d = i.due { chip(dueLabel(d), "calendar", overdue ? .red : .secondary) }
                         if let d = i.done { chip("Done \(d.formatted(date: .abbreviated, time: .shortened))", "checkmark", .green) }
                         else { Text("Created \(i.created.formatted(date: .abbreviated, time: .omitted))").font(.caption2).foregroundStyle(.tertiary) }
                     }
@@ -572,7 +691,6 @@ struct TodoModal: View {
     @State var item: TodoItem
     @State private var subs: [SubDraft]
     @State private var links: [TodoLink]
-    @State private var hasDue: Bool
     @State private var newSub = ""
     @State private var linkQuery = ""
     @FocusState private var subFocus: Bool
@@ -582,7 +700,6 @@ struct TodoModal: View {
         _item = State(initialValue: item)
         _subs = State(initialValue: subs)
         _links = State(initialValue: links)
-        _hasDue = State(initialValue: item.due != nil)
         self.onSave = onSave
     }
 
@@ -599,7 +716,6 @@ struct TodoModal: View {
     }
 
     func commit(done: Date?? = nil) {
-        if !hasDue { item.due = nil } else if item.due == nil { item.due = Date() }
         if let d = done { item.done = d }
         onSave(item, subs, links); dismiss()
     }
@@ -692,13 +808,7 @@ struct TodoModal: View {
                                 ForEach(0..<4, id: \.self) { Text(priorityNames[$0]).tag($0) }
                             }.pickerStyle(.segmented).labelsHidden()
                         }
-                        section("Due date") {
-                            HStack {
-                                Toggle("", isOn: $hasDue).labelsHidden()
-                                if hasDue { DatePicker("", selection: Binding(get: { item.due ?? Date() }, set: { item.due = $0 }), displayedComponents: .date).labelsHidden() }
-                                else { Text("No due date").foregroundStyle(.secondary) }
-                            }
-                        }
+                        section("Due date") { DueDateButton(due: $item.due) }
                     }
                 }.padding(20)
             }

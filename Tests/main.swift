@@ -148,6 +148,18 @@ func timestamp() {
 }
 
 segCodecRoundTrip(); markdownBlocks(); readOnlyGuard(); diffMarksChangedLine(); cron()
-cronNL(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
+func dueDates() {
+    let cal = Calendar.current
+    let today = cal.startOfDay(for: Date())
+    check(dueLabel(today).hasPrefix("Today"), "due: today label")
+    check(dueLabel(cal.date(byAdding: .day, value: 1, to: today)!).hasPrefix("Tomorrow"), "due: tomorrow label")
+    check(dueLabel(cal.date(byAdding: .day, value: -3, to: today)!).hasPrefix("3 days overdue"), "due: overdue label")
+    check(!isOverdue(today), "due: date-only today is not overdue")
+    let past = cal.date(byAdding: .minute, value: -5, to: Date())!
+    check(!dueHasTime(today) && (!dueHasTime(past) || isOverdue(past)), "due: past timed date is overdue")
+    let p = subProgress([SubDraft(title: "a", done: true), SubDraft(title: "b", done: false), SubDraft(title: "c", done: false)])
+    check(p.percent == 33 && p.done == 1, "subtask progress 33%")
+}
+cronNL(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

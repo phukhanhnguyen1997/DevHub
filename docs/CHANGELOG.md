@@ -4,6 +4,8 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
+- Todos: new due date picker (popover with quick chips Today / Tomorrow / Next week / Next month, month calendar, optional time). Due labels show relative + absolute (e.g. "Tomorrow · 23 Nov, 09:00"); overdue is time-aware.
+
 - Todos redesign: card UI with priority stripe, stats header, progress % (e.g. 1 of 3 sub-items = 33%), DONE enabled only when all sub-items are complete, todo-to-todo links with notes (table `todo_links`, searchable, logged as linked/unlinked/link note).
 
 - Todos: "New…" / double-click opens a modal with title, description, sub-item checklist, priority, due date and done flag. Sub-items are stored in `todo_subs`, shown with progress on each row, searchable, and sub-item completions are written to the Activity log.
