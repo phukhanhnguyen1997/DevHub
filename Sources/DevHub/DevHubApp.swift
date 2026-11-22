@@ -9,6 +9,7 @@ struct DevHubApp: App {
     @StateObject private var app = AppState()
     @StateObject private var clip = ClipStore()
     @StateObject private var todos = TodoStore()
+    @ObservedObject private var shortcuts = ShortcutStore.shared
 
     init() {
         Notifier.shared.setup()
@@ -39,16 +40,19 @@ struct DevHubApp: App {
                     .keyboardShortcut("k", modifiers: .command)
             }
             CommandMenu("Go") {
-                ForEach(Array(Tab.allCases.enumerated()), id: \.element) { i, t in
-                    Button(t.rawValue) { app.tab = t }
-                        .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
+                ForEach(app.tabs) { t in
+                    Button(t.rawValue) { app.tab = t }.shortcut(shortcuts.combo("tab.\(t.rawValue)"))
                 }
                 Divider()
-                ForEach(Array(ToolKind.allCases.prefix(9).enumerated()), id: \.element) { i, k in
+                ForEach(ToolKind.allCases) { k in
                     Button("Tool: \(k.rawValue)") { app.tab = .tools; app.toolKind = k }
-                        .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: [.command, .control])
+                        .shortcut(shortcuts.combo("tool.\(k.rawValue)"))
                 }
             }
+        }
+
+        Settings {
+            SettingsView().environmentObject(app)
         }
 
         MenuBarExtra {

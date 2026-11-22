@@ -3,6 +3,7 @@ import SwiftUI
 enum Tab: String, CaseIterable, Identifiable {
     case connections = "Connections", notes = "Notes", todos = "Todos", clipboard = "Clipboard", db = "DB Query", ports = "Ports", vault = "Vault", tools = "Tools"
     var id: String { rawValue }
+    static let defaultOrder: [Tab] = allCases
     var icon: String {
         switch self {
         case .connections: return "bolt.horizontal.circle"
@@ -20,6 +21,12 @@ enum Tab: String, CaseIterable, Identifiable {
 @MainActor
 final class AppState: ObservableObject {
     @Published var tab: Tab = .connections
+    @Published var tabs: [Tab] = {
+        let saved = (UserDefaults.standard.stringArray(forKey: "tabOrder") ?? []).compactMap(Tab.init(rawValue:))
+        return saved + Tab.allCases.filter { !saved.contains($0) }
+    }() {
+        didSet { UserDefaults.standard.set(tabs.map(\.rawValue), forKey: "tabOrder") }
+    }
     @Published var toolKind: ToolKind = .json
     @Published var showPalette = false
     @Published var selectedProfile: UUID?
@@ -43,8 +50,11 @@ struct RootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(Tab.allCases, selection: Binding(get: { app.tab }, set: { app.tab = $0 ?? .connections })) { t in
-                Label(t.rawValue, systemImage: t.icon).tag(t)
+            List(selection: Binding(get: { app.tab }, set: { app.tab = $0 ?? .connections })) {
+                ForEach(app.tabs) { t in
+                    Label(t.rawValue, systemImage: t.icon).tag(t)
+                }
+                .onMove { app.tabs.move(fromOffsets: $0, toOffset: $1) }
             }
             .navigationSplitViewColumnWidth(min: 150, ideal: 170)
         } detail: {

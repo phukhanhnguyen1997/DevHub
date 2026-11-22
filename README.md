@@ -12,6 +12,10 @@ Native macOS (SwiftUI) developer utility: tunnel manager, markdown notes with Cm
 - **Tools**: JSON, Base64, URL, JWT, Hash, UUID/ObjectId/ULID, Password generator, Timestamp (date picker, GMT+7), Regex, Diff, Cron (both directions: cron ↔ English), SQL format, CSV/JSON/INSERT, JSON to TypeScript.
 
 ## Shortcuts
+
+All tab and tool shortcuts are customizable in **Settings (⌘,)**: click a shortcut and press new keys (Esc cancels, Delete clears, clashes are resolved automatically). The sidebar can be reordered by drag and drop; the order is remembered.
+
+Defaults:
 - `⌘1`…`⌘8` jump to tab (Connections, Notes, Todos, Clipboard, DB Query, Ports, Vault, Tools); see the **Go** menu
 - `⌃⌘1`…`⌃⌘9` open tool (JSON Format, JSON minify, Base64, URL, JWT, Hash, UUID, Password, Unix Timestamp)
 - `⌘K` command palette (notes, actions, generators, epoch → GMT+7)
