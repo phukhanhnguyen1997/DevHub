@@ -143,7 +143,7 @@ struct CodeEditorCard: View {
                     NSPasteboard.general.setString(Vault.substitute(seg.text), forType: .string)
                     copied = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-                } label: { Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc").font(.caption) }
+                } label: { Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc").font(.caption).lineLimit(1).fixedSize() }
                 Button(role: .destructive, action: onDelete) { Image(systemName: "trash").font(.caption) }.help("Delete block")
             }
             .buttonStyle(.borderless)

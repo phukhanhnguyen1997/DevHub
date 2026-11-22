@@ -1,10 +1,11 @@
-# Notes redesign: decision
+# Notes redesign: decision (v2)
 
-Chosen: direction B (Workspace: tabs + inspector). Mock: `.working/directions-1.html`.
+v1 (tabs + inspector, `.working/directions-1.html`) was rejected: three columns were too cramped for a small, work-only note set.
 
-- Tabs for open notes (persisted in UserDefaults `noteTabs`), recent list (`recentNotes`), back/forward history in memory.
-- Slim sidebar: search, tag chips, Pinned / Recent / All notes. Titles and snippets wrap to max 2 lines (tooltip shows full title).
-- Right inspector (toggle, `notesInspector`): outline, linked from, links to (missing targets shown), properties. Status bar: save state, words, backlinks.
-- ⌘K: Recent notes (empty query), Notes (title match), Inside notes (body match with snippet), Actions, "New note".
-- Not chosen: daily note and templates (suggested features 4 and 5), Library and Gallery directions.
+Chosen v2: direction C (`.working/directions-2.html`).
+- Few notes (about 5), so no sidebar list, no tabs, no Recent. Note chips on top, horizontally scrollable, pinned first.
+- Full-width title (one line) and editor; code-block Copy button never wraps.
+- Sticky "On this page" rail on the right, hidden when narrow. Backlinks and outgoing links live in a status-bar menu.
+- Search is the existing ⌘K palette (Notes / Inside notes / Actions / New note).
+- Notes hold no secrets by user decision, so code blocks are not masked.
 - No schema or file-format change. Not verified at runtime by screenshot.

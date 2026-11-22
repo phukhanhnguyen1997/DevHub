@@ -4,7 +4,7 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
-- Notes redesign (bmad-ux, direction B "Workspace"): open notes as tabs (persisted), back/forward history (⌘[ / ⌘]), slim sidebar with Pinned / Recent / All notes (titles wrap to 2 lines), right inspector (outline, linked from, links to, properties; toggle with the sidebar button), status bar (save state, word count, backlinks). ⌘K now groups results into Recent notes / Notes / Inside notes / Actions and offers "New note \"query\"". See docs/ux/notes-redesign/.
+- Notes redesign v2 (bmad-ux, direction C): replaced the 3-pane/tabs layout with a row of note chips on top (scrolls horizontally, pinned first, right-click to pin), full-width editor, sticky "On this page" table of contents on the right (hidden when the window is narrow), ⌘K search pill, status bar with save state and a links menu (linked from / links to). Removed Recent, tabs and the inspector. Fixed the Copy button wrapping ("C op y") and the cramped title. ⌘K shows Notes / Inside notes / Actions / New note. See docs/ux/notes-redesign/.
 
 - Todos redesign (bmad-ux, direction A "soft cards"): cards collapse/expand per item plus Expand all / Collapse all; bigger progress (15pt %, thick bar, count); round sub-item checks; long titles/descriptions wrap fully. New layouts: List (group by date Overdue/Today/Upcoming/No date, or by priority), Kanban Board (To do / Doing / Done, drag to move), Calendar (month/week, Monday-first). Additive schema change: `todos.status` (0 to do, 1 doing), logged as started / moved to to do. See docs/ux/todos-redesign/.
 

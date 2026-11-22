@@ -236,7 +236,7 @@ struct CodeCard: View {
                     copied = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
                 } label: {
-                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc").font(.caption)
+                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc").font(.caption).lineLimit(1).fixedSize()
                 }.buttonStyle(.borderless)
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
