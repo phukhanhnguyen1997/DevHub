@@ -8,6 +8,7 @@ struct DevHubApp: App {
     @StateObject private var notes = NotesStore()
     @StateObject private var app = AppState()
     @StateObject private var clip = ClipStore()
+    @StateObject private var todos = TodoStore()
 
     init() {
         Notifier.shared.setup()
@@ -29,6 +30,7 @@ struct DevHubApp: App {
                 .environmentObject(notes)
                 .environmentObject(app)
                 .environmentObject(clip)
+                .environmentObject(todos)
                 .onAppear { GlobalHotKey.register { summon() } }
         }
         .commands {

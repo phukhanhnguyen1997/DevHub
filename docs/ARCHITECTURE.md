@@ -12,6 +12,7 @@ SwiftPM executable `DevHub`, sources in `Sources/DevHub/`.
 | `NotesStore.swift` / `NotesView.swift` | SQLite FTS5 index, tags, backlinks, UI, Cmd+K `PaletteView` |
 | `Markdown.swift` / `BlockEditor.swift` | Markdown renderer; block editor (`SegCodec`) |
 | `DataViews.swift` | DB Query, Ports, Vault views |
+| `TodoView.swift` | `TodoStore` (SQLite `todos.sqlite`: `todos` + append-only `todo_log`), Todos UI |
 | `Clipboard.swift` | `ClipStore` (SQLite `clipboard.sqlite` + `ClipImages/`, retention, type classification), view, Carbon global hotkey (⌃⌥K) |
 | `ToolsView.swift`, `ToolsExtra.swift`, `Converters.swift` | All dev tools |
 

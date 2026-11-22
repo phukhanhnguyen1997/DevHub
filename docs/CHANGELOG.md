@@ -2,6 +2,10 @@
 
 Newest first. Hashes refer to git commits.
 
+## Unreleased
+
+- Todos tab: todo list stored permanently in SQLite (`todos.sqlite`), soft delete + trash, Done log by day, Activity log, search and date-range filter.
+
 ## v0.1.0
 
 First release: tunnel manager with auto re-auth, notes with Cmd+K search, DB quick query, vault, port monitor, SQLite clipboard history and developer tools.
