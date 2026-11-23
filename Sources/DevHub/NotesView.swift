@@ -332,6 +332,7 @@ struct PaletteView: View {
     @EnvironmentObject var app: AppState
     @EnvironmentObject var cm: ConnectionManager
     @EnvironmentObject var notes: NotesStore
+    @EnvironmentObject var todos: TodoStore
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var index = 0
@@ -406,6 +407,19 @@ struct PaletteView: View {
                 }
             }
         }
+        var todoItems: [Item] = [], subItems: [Item] = []
+        for h in todoSearch(todos.items, subs: todos.subs, notes: todos.notes, query: q) {
+            let open = { app.tab = .todos; app.openTodo = h.item.id }
+            let state = h.item.done != nil ? "Done" : (h.item.status == 1 ? "Doing" : "To do")
+            let snippet = h.via.replacingOccurrences(of: "\n", with: " ")
+            if let s = h.sub {
+                subItems.append(Item(title: s.title, subtitle: "\(s.done ? "✓ " : "")in \(h.item.title)\(snippet.isEmpty ? "" : " · \(snippet)")",
+                                     icon: s.done ? "checkmark.circle" : "circle", section: "Sub-tasks", run: open))
+            } else {
+                todoItems.append(Item(title: h.item.title, subtitle: snippet.isEmpty ? state : "\(state) · \(snippet)",
+                                      icon: h.item.done != nil ? "checkmark.circle.fill" : "checklist", section: "Todos", run: open))
+            }
+        }
         var create: [Item] = []
         if !q.isEmpty {
             create = [Item(title: "New note \"\(q)\"", subtitle: "Create and open", icon: "square.and.pencil") {
@@ -417,7 +431,7 @@ struct PaletteView: View {
                 if let path = notes.createNote(named: q) { app.tab = .notes; app.openNote = path }
             }]
         }
-        let shown = [tsItem].compactMap { $0 } + noteItems.prefix(6) + inside.prefix(6) + actions.prefix(8) + create
+        let shown = [tsItem].compactMap { $0 } + noteItems.prefix(6) + todoItems.prefix(5) + subItems.prefix(5) + inside.prefix(6) + actions.prefix(8) + create
         return Array(shown)
     }
 

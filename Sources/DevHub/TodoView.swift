@@ -287,6 +287,38 @@ func isOverdue(_ d: Date) -> Bool {
     dueHasTime(d) ? d < Date() : d < Calendar.current.startOfDay(for: Date())
 }
 
+// A ⌘K match: a todo (sub == nil) or one of its sub-items; `via` says what matched when it is not the title.
+struct TodoHit {
+    let item: TodoItem
+    let sub: SubDraft?
+    let via: String
+}
+
+// Open todos first, then done ones; deleted todos are skipped. All words of the query must match.
+func todoSearch(_ items: [TodoItem], subs: [Int64: [SubDraft]], notes: [Int64: [SubNote]], query: String) -> [TodoHit] {
+    let words = query.split(separator: " ").map(String.init)
+    guard !words.isEmpty else { return [] }
+    func hit(_ texts: [String]) -> Bool {
+        let all = texts.joined(separator: "\n")
+        return words.allSatisfy { all.localizedCaseInsensitiveContains($0) }
+    }
+    var todoHits: [TodoHit] = [], subHits: [TodoHit] = []
+    for i in items where !i.deleted {
+        if hit([i.title]) { todoHits.append(TodoHit(item: i, sub: nil, via: "")) }
+        else if hit([i.detail]) { todoHits.append(TodoHit(item: i, sub: nil, via: i.detail)) }
+        for s in subs[i.id] ?? [] {
+            let ns = (s.dbId.flatMap { notes[$0] } ?? []).map(\.note)
+            if hit([s.title]) { subHits.append(TodoHit(item: i, sub: s, via: "")) }
+            else if let n = ns.first(where: { hit([$0]) }) { subHits.append(TodoHit(item: i, sub: s, via: n)) }
+        }
+    }
+    let rank: ([TodoHit]) -> [TodoHit] = { $0.enumerated().sorted { a, b in
+        let da = a.element.item.done != nil, db = b.element.item.done != nil
+        return da != db ? !da : a.offset < b.offset
+    }.map(\.element) }
+    return rank(todoHits) + rank(subHits)
+}
+
 func dueLabel(_ d: Date) -> String {
     let cal = Calendar.current
     let days = cal.dateComponents([.day], from: cal.startOfDay(for: Date()), to: cal.startOfDay(for: d)).day ?? 0
@@ -552,6 +584,7 @@ struct TodoView: View {
     @State private var from = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
     @State private var to = Date()
     @State private var newTitle = ""
+    @EnvironmentObject var app: AppState
     @State private var editing: TodoItem?
     @State private var creating = false
     @State private var layout: Layout = .list
@@ -615,6 +648,8 @@ struct TodoView: View {
             content
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear { openRequested() }
+        .onChange(of: app.openTodo) { _, _ in openRequested() }
         .sheet(item: $editing) { item in
             TodoModal(item: item, subs: store.subs[item.id] ?? [], links: store.links[item.id] ?? []) { store.save($0, subs: $1, links: $2) }
                 .environmentObject(store)
@@ -818,6 +853,16 @@ struct TodoView: View {
                 .frame(width: 44, alignment: .leading)
             ProgressView(value: Double(p.done), total: Double(max(p.total, 1))).tint(color).scaleEffect(x: 1, y: 1.8)
             Text("\(p.done)/\(p.total)").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(.secondary)
+        }
+    }
+
+    // Opens the todo chosen in ⌘K once the palette sheet has gone away.
+    private func openRequested() {
+        guard let id = app.openTodo else { return }
+        app.openTodo = nil
+        mode = .active
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            if let t = store.items.first(where: { $0.id == id }) { editing = t }
         }
     }
 

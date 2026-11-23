@@ -205,6 +205,21 @@ func todoBridge() {
     check((try? TodoBridge.parse(["sub", "--todo", "x", "--step", "y", "--status", "bogus"])) == nil, "bridge: invalid status rejected at parse")
     check(run(["status", "--todo", "Release"]).contains("[ ] Step 1 Spec (rework)"), "bridge: status report shows latest status")
 }
-todoBridge(); sidebarBadge(); cronNL(); noteLinks(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
+func todoPalette() {
+    func t(_ id: Int64, _ title: String, detail: String = "", done: Bool = false, deleted: Bool = false) -> TodoItem {
+        TodoItem(id: id, title: title, detail: detail, priority: 0, due: nil, created: Date(), done: done ? Date() : nil, deleted: deleted)
+    }
+    let items = [t(1, "Home work", done: true), t(2, "Homework planning"), t(3, "Gone home", deleted: true), t(4, "Release", detail: "ship the kafka fix")]
+    let subs: [Int64: [SubDraft]] = [1: [SubDraft(dbId: 10, title: "Math", done: true)], 4: [SubDraft(dbId: 11, title: "Deploy", done: false)]]
+    let notes: [Int64: [SubNote]] = [11: [SubNote(id: 1, subId: 11, todoId: 4, at: Date(), author: "ai", status: "done", note: "deployed to test env")]]
+    let h = todoSearch(items, subs: subs, notes: notes, query: "home")
+    check(h.map(\.item.id) == [2, 1], "palette todos: open first, then done; deleted skipped")
+    check(todoSearch(items, subs: subs, notes: notes, query: "math").first?.sub?.title == "Math", "palette todos: matches sub-task title")
+    let viaNote = todoSearch(items, subs: subs, notes: notes, query: "deployed test")
+    check(viaNote.count == 1 && viaNote[0].sub?.title == "Deploy" && viaNote[0].via == "deployed to test env", "palette todos: matches sub-task by report note")
+    check(todoSearch(items, subs: subs, notes: notes, query: "kafka").first?.via == "ship the kafka fix", "palette todos: matches description")
+    check(todoSearch(items, subs: subs, notes: notes, query: "  ").isEmpty, "palette todos: empty query returns nothing")
+}
+todoPalette(); todoBridge(); sidebarBadge(); cronNL(); noteLinks(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

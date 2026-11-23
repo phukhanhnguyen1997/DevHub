@@ -3,6 +3,8 @@
 Newest first. Hashes refer to git commits.
 
 ## Unreleased
+- ⌘K now searches todos and sub-tasks (title, description, report notes); Enter opens the todo.
+
 
 - Todo CLI bridge: `devhub-todo create|sub|status` lets any tool create todos with sub-items and append reports per sub-item (status started/done/rework/blocked/note + note text, history kept in new table `todo_sub_notes`). Todos tab live-reloads when the database changes and shows a timeline per sub-item (2-line clamp, tap to expand, notes searchable). See docs/plans/ai-todo-bridge.md and docs/ux/ai-step-notes/.
 
