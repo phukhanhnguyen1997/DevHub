@@ -340,6 +340,14 @@ final class ConnectionManager: ObservableObject {
     private func received(_ id: UUID, _ raw: String, patterns: String) {
         let text = Self.clean(raw)
         append(id, text)
+        // gcloud prints "Reauthentication successful" / "Listening on port": clear any stale re-auth warning.
+        if text.range(of: "(?i)reauthentication successful|listening on port", options: .regularExpression) != nil {
+            if states[id] == .needsReauth || states[id] == .starting {
+                states[id] = text.range(of: "(?i)listening on port", options: .regularExpression) != nil ? .running : .starting
+                retries[id] = 0
+            }
+            return
+        }
         let pats = patterns.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
         for pat in pats {
             if text.range(of: pat, options: [.regularExpression, .caseInsensitive]) != nil {

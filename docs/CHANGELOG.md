@@ -4,6 +4,8 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
+- Fix: tunnel stayed on "Re-auth needed" after a successful re-auth. gcloud's "Reauthentication successful" matched the re-auth pattern; now it and "Listening on port" clear the warning (state becomes Running).
+
 - ⌘K animation (bmad-ux, direction B): results slide in with a stagger, a single selection bar glides between rows, matched keywords are highlighted. After Enter on a note, the editor fades in, scrolls smoothly to the match and flashes an orange highlight (code blocks pulse an orange border). See docs/ux/cmdk-animation/.
 
 - Notes redesign v2 (bmad-ux, direction C): replaced the 3-pane/tabs layout with a row of note chips on top (scrolls horizontally, pinned first, right-click to pin), full-width editor, sticky "On this page" table of contents on the right (hidden when the window is narrow), ⌘K search pill, status bar with save state and a links menu (linked from / links to). Removed Recent, tabs and the inspector. Fixed the Copy button wrapping ("C op y") and the cramped title. ⌘K shows Notes / Inside notes / Actions / New note. See docs/ux/notes-redesign/.
