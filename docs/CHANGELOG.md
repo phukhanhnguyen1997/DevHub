@@ -4,6 +4,8 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
+- Sidebar redesign (bmad-ux, direction A): groups Work / Data / Utilities, coloured icons, Connections status dot, Todos badge (open overdue + due today), dim shortcut hints, bottom tunnel summary. Drag-reorder now works within each group. See docs/ux/sidebar-redesign/.
+
 - Tools redesign (bmad-ux, direction B): left rail with search and groups (Format / Encode / Generate / Time & text) replaces the dropdown; right-click to pin tools to the top; Input and Output side by side; Paste / Clear / Swap buttons and a size/lines status. See docs/ux/tools-redesign/.
 
 - Fix: tunnel stayed on "Re-auth needed" after a successful re-auth. gcloud's "Reauthentication successful" matched the re-auth pattern; now it and "Listening on port" clear the warning (state becomes Running).

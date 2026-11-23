@@ -1,0 +1,57 @@
+<!doctype html><meta charset=utf-8><title>Sidebar – 3 directions</title>
+<style>
+body{font:13px -apple-system,system-ui;background:#eceae6;margin:0;padding:24px;color:#222}
+h1{font-size:20px}h2{font-size:15px;margin:0 0 4px}p{margin:0 0 10px;color:#555;max-width:300px;font-size:12px}
+.row{display:flex;gap:24px;align-items:flex-start}
+.col{width:230px}
+.sb{height:470px;background:#e8e5e0;border-radius:10px;padding:10px;box-shadow:0 4px 18px #0003;position:relative}
+.it{display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:7px;margin:1px 0}
+.ic{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.on{background:#2f6fed;color:#fff}.g{font-size:10px;letter-spacing:.06em;color:#8a857d;margin:14px 9px 4px;font-weight:600}
+.bd{margin-left:auto;font-size:10px;background:#0002;border-radius:9px;padding:1px 6px}
+.dot{width:8px;height:8px;border-radius:50%;margin-left:auto}
+.kb{margin-left:auto;font-size:10px;opacity:.55}
+.foot{position:absolute;bottom:10px;left:10px;right:10px;border-top:1px solid #0002;padding-top:8px;font-size:11px;color:#666}
+.rail{width:56px}.rail .it{justify-content:center;padding:8px 0;position:relative}
+.rail .ic{width:26px;height:26px;font-size:14px}.tip{position:absolute;left:52px;background:#222;color:#fff;padding:3px 8px;border-radius:5px;font-size:11px;white-space:nowrap}
+.srch{background:#fff8;border:1px solid #0002;border-radius:7px;padding:5px 8px;color:#888;font-size:12px;margin:6px 0 4px}
+</style>
+<h1>Sidebar (menu trái) – 3 hướng</h1>
+<div class=row>
+<div class=col><h2>A · Nhóm + icon màu + trạng thái</h2><p>Chia nhóm (Work / Data / Utilities), icon nền màu bo góc như System Settings. Connections hiện chấm trạng thái tổng (đỏ nếu có re-auth), Todos hiện số việc quá hạn, hàng dưới cùng hiện nhanh số tunnel đang chạy. Hiện phím tắt ⌘1…⌘8 mờ bên phải.</p>
+<div class=sb>
+<div class=g>WORK</div>
+<div class="it on"><span class=ic style="background:#ffffff33">📝</span>Notes<span class=kb style="color:#fff">⌘1</span></div>
+<div class=it><span class=ic style="background:#34c759">⚡</span>Connections<span class=dot style="background:#ff3b30"></span></div>
+<div class=it><span class=ic style="background:#ff9500">✓</span>Todos<span class=bd>3</span></div>
+<div class=g>DATA</div>
+<div class=it><span class=ic style="background:#5856d6">▤</span>DB Query</div>
+<div class=it><span class=ic style="background:#32ade6">⌁</span>Ports</div>
+<div class=it><span class=ic style="background:#8e8e93">🔑</span>Vault</div>
+<div class=g>UTILITIES</div>
+<div class=it><span class=ic style="background:#ff2d55">📋</span>Clipboard</div>
+<div class=it><span class=ic style="background:#a2845e">🛠</span>Tools</div>
+<div class=foot>● 3 tunnels running · ⚠ 1 re-auth</div></div></div>
+
+<div class=col><h2>B · Icon rail thu gọn</h2><p>Chỉ icon (rộng 56px), tên hiện khi rê chuột, badge nhỏ ở góc. Nhường nhiều chỗ nhất cho nội dung (Notes, Tools đang có rail riêng nên đỡ "rail trong rail"). Mở rộng bằng nút ◧.</p>
+<div class="sb rail">
+<div class=it style="margin-bottom:6px;color:#777">◧</div>
+<div class="it"><span class="ic on">📝</span><span class=tip>Notes ⌘1</span></div>
+<div class=it><span class=ic>⚡</span></div>
+<div class=it><span class=ic>✓</span></div>
+<div class=it><span class=ic>📋</span></div>
+<div class=it><span class=ic>▤</span></div>
+<div class=it><span class=ic>⌁</span></div>
+<div class=it><span class=ic>🔑</span></div>
+<div class=it><span class=ic>🛠</span></div>
+<div class=foot style="text-align:center;left:0;right:0">●</div></div></div>
+
+<div class=col><h2>C · Tối giản + tìm nhanh</h2><p>Giữ danh sách phẳng, icon đơn sắc, thêm ô "Jump to…  ⌘K" trên cùng, mục đang chọn là thanh nhấn bên trái (không tô xanh đậm). Dưới cùng là Settings.</p>
+<div class=sb>
+<div class=srch>🔍 Jump to…  <span style="float:right">⌘K</span></div>
+<div class="it" style="background:#fff9;box-shadow:inset 3px 0 #2f6fed">📝 Notes</div>
+<div class=it>⚡ Connections<span class=dot style="background:#ff3b30"></span></div>
+<div class=it>✓ Todos<span class=bd>3</span></div>
+<div class=it>📋 Clipboard</div><div class=it>▤ DB Query</div><div class=it>⌁ Ports</div><div class=it>🔑 Vault</div><div class=it>🛠 Tools</div>
+<div class=foot>⚙ Settings</div></div></div>
+</div>

@@ -173,6 +173,15 @@ func dueDates() {
     let month = calendarDays(anchor: Date(), week: false)
     check(month.count % 7 == 0 && month.count >= 28, "calendar: month grid is whole weeks")
 }
-cronNL(); noteLinks(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
+func sidebarBadge() {
+    let cal = Calendar.current
+    func item(_ due: Date?, done: Date? = nil, deleted: Bool = false) -> TodoItem {
+        TodoItem(id: 1, title: "t", detail: "", priority: 0, due: due, created: Date(), done: done, deleted: deleted)
+    }
+    let past = cal.date(byAdding: .day, value: -2, to: Date())!, later = cal.date(byAdding: .day, value: 5, to: Date())!
+    let n = todoAttentionCount([item(past), item(Date()), item(later), item(nil), item(past, done: Date()), item(past, deleted: true)])
+    check(n == 2, "sidebar badge: counts open overdue + today only")
+}
+sidebarBadge(); cronNL(); noteLinks(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

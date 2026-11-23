@@ -16,6 +16,31 @@ enum Tab: String, CaseIterable, Identifiable {
         case .tools: return "wrench.and.screwdriver"
         }
     }
+    var group: String {
+        switch self {
+        case .notes, .connections, .todos: return "Work"
+        case .db, .ports, .vault: return "Data"
+        case .clipboard, .tools: return "Utilities"
+        }
+    }
+    var tint: Color {
+        switch self {
+        case .notes: return .blue
+        case .connections: return .green
+        case .todos: return .orange
+        case .db: return .indigo
+        case .ports: return .cyan
+        case .vault: return .gray
+        case .clipboard: return .pink
+        case .tools: return .brown
+        }
+    }
+    static let groups = ["Work", "Data", "Utilities"]
+}
+
+// Open todos that are overdue or due today (shown as the sidebar badge).
+func todoAttentionCount(_ items: [TodoItem]) -> Int {
+    items.filter { !$0.deleted && $0.done == nil && [.overdue, .today].contains(dueBucket($0.due)) }.count
 }
 
 @MainActor
@@ -47,16 +72,51 @@ func statusColor(_ s: RunState) -> Color {
 struct RootView: View {
     @EnvironmentObject var app: AppState
     @EnvironmentObject var cm: ConnectionManager
+    @EnvironmentObject var todos: TodoStore
+    @ObservedObject private var shortcuts = ShortcutStore.shared
+
+    private func badge(_ t: Tab) -> Int { t == .todos ? todoAttentionCount(todos.items) : 0 }
+
+    private var dotColor: Color? {
+        let o = cm.overall
+        return o == .stopped ? nil : statusColor(o)
+    }
+
+    private var tunnelSummary: some View {
+        let running = cm.profiles.filter { cm.state($0) == .running }.count
+        let reauth = cm.profiles.filter { cm.state($0) == .needsReauth }.count
+        return HStack(spacing: 6) {
+            Circle().fill(reauth > 0 ? .red : running > 0 ? .green : .gray).frame(width: 7, height: 7)
+            Text("\(running) running").foregroundStyle(.secondary)
+            if reauth > 0 { Text("· \(reauth) re-auth").foregroundStyle(.red) }
+            Spacer()
+        }
+        .font(.caption).lineLimit(1)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture { app.tab = .connections }
+        .background(.bar)
+    }
 
     var body: some View {
         NavigationSplitView {
             List(selection: Binding(get: { app.tab }, set: { app.tab = $0 ?? .connections })) {
-                ForEach(app.tabs) { t in
-                    Label(t.rawValue, systemImage: t.icon).tag(t)
+                ForEach(Tab.groups, id: \.self) { g in
+                    Section(g.uppercased()) {
+                        ForEach(app.tabs.filter { $0.group == g }) { t in
+                            SidebarRow(tab: t, badge: badge(t), dot: t == .connections ? dotColor : nil, combo: shortcuts.combo("tab.\(t.rawValue)"))
+                                .tag(t)
+                        }
+                        .onMove { from, to in
+                            var sub = app.tabs.filter { $0.group == g }
+                            sub.move(fromOffsets: from, toOffset: to)
+                            app.tabs = Tab.groups.flatMap { gg in gg == g ? sub : app.tabs.filter { $0.group == gg } }
+                        }
+                    }
                 }
-                .onMove { app.tabs.move(fromOffsets: $0, toOffset: $1) }
             }
-            .navigationSplitViewColumnWidth(min: 150, ideal: 170)
+            .safeAreaInset(edge: .bottom) { tunnelSummary }
+            .navigationSplitViewColumnWidth(min: 170, ideal: 190)
         } detail: {
             switch app.tab {
             case .connections: ConnectionsView()
@@ -76,5 +136,28 @@ struct RootView: View {
             if let p = info["profile"], let id = UUID(uuidString: p) { app.selectedProfile = id }
         }
         .frame(minWidth: 980, minHeight: 620)
+    }
+}
+
+struct SidebarRow: View {
+    let tab: Tab
+    let badge: Int
+    let dot: Color?
+    let combo: Combo?
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: tab.icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                .frame(width: 22, height: 22).background(tab.tint.gradient, in: RoundedRectangle(cornerRadius: 6))
+            Text(tab.rawValue).lineLimit(1)
+            Spacer(minLength: 4)
+            if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
+            if badge > 0 {
+                Text("\(badge)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 1).background(Color.red, in: Capsule())
+            }
+            if let combo { Text(combo.display).font(.system(size: 10)).foregroundStyle(.tertiary) }
+        }
+        .padding(.vertical, 2)
     }
 }
