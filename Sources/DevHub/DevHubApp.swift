@@ -3,6 +3,14 @@ import AppKit
 import ServiceManagement
 
 @main
+enum Launcher {
+    static func main() {
+        // `DevHub --todo ...` is the headless CLI (see TodoBridge); everything else starts the GUI.
+        if let code = TodoBridge.runIfRequested(CommandLine.arguments) { exit(code) }
+        DevHubApp.main()
+    }
+}
+
 struct DevHubApp: App {
     @StateObject private var cm = ConnectionManager()
     @StateObject private var notes = NotesStore()

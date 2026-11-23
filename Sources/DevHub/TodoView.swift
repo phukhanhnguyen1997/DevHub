@@ -50,16 +50,31 @@ final class TodoStore: ObservableObject {
     @Published var events: [TodoEvent] = []
     @Published var subs: [Int64: [SubDraft]] = [:]
     @Published var links: [Int64: [TodoLink]] = [:]
+    @Published var notes: [Int64: [SubNote]] = [:] // keyed by sub-item id
     private var db: OpaquePointer?
+    private var watcher: DispatchSourceFileSystemObject?
+    private var pending: DispatchWorkItem?
+
+    // External writers (the devhub-todo CLI) change the file; reload shortly after the last write.
+    private func watch() {
+        let fd = open(Store.dir.appendingPathComponent("todos.sqlite").path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let src = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .extend, .attrib], queue: .main)
+        src.setEventHandler { [weak self] in
+            self?.pending?.cancel()
+            let w = DispatchWorkItem { [weak self] in self?.reload() }
+            self?.pending = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: w)
+        }
+        src.setCancelHandler { close(fd) }
+        src.resume()
+        watcher = src
+    }
 
     init() {
         sqlite3_open(Store.dir.appendingPathComponent("todos.sqlite").path, &db)
-        run("CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', priority INTEGER NOT NULL DEFAULT 0, due REAL, created REAL NOT NULL, done REAL, deleted INTEGER NOT NULL DEFAULT 0)")
-        run("CREATE TABLE IF NOT EXISTS todo_log (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, action TEXT NOT NULL, title TEXT NOT NULL, date REAL NOT NULL)")
-        run("CREATE TABLE IF NOT EXISTS todo_subs (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, pos INTEGER NOT NULL DEFAULT 0)")
-        run("CREATE TABLE IF NOT EXISTS todo_links (id INTEGER PRIMARY KEY AUTOINCREMENT, a INTEGER NOT NULL, b INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', created REAL NOT NULL)")
-        run("CREATE INDEX IF NOT EXISTS idx_log_date ON todo_log(date)")
-        run("ALTER TABLE todos ADD COLUMN status INTEGER NOT NULL DEFAULT 0") // no-op error when the column already exists
+        TodoBridge.ensureSchema(db)
+        watch()
         reload()
     }
 
@@ -121,6 +136,7 @@ final class TodoStore: ObservableObject {
         }
         sqlite3_finalize(s3)
         subs = sm
+        notes = TodoBridge.loadNotes(db)
         var lm: [Int64: [TodoLink]] = [:]
         var s4: OpaquePointer?
         if sqlite3_prepare_v2(db, "SELECT a, b, note FROM todo_links ORDER BY id", -1, &s4, nil) == SQLITE_OK {
@@ -541,6 +557,8 @@ struct TodoView: View {
     @State private var layout: Layout = .list
     @State private var grouping: Grouping = .date
     @State private var collapsed: Set<Int64> = []
+    @State private var openTimelines: Set<Int64> = [] // sub-item ids whose timeline is open
+    @State private var openNotes: Set<Int64> = [] // note ids shown in full
     @State private var calWeek = false
     @State private var calAnchor = Date()
 
@@ -563,6 +581,7 @@ struct TodoView: View {
         if query.isEmpty { return true }
         if i.title.localizedCaseInsensitiveContains(query) || i.detail.localizedCaseInsensitiveContains(query) { return true }
         if store.subs[i.id]?.contains(where: { $0.title.localizedCaseInsensitiveContains(query) }) == true { return true }
+        if store.subs[i.id]?.contains(where: { sub in sub.dbId.flatMap { store.notes[$0] }?.contains { $0.note.localizedCaseInsensitiveContains(query) } == true }) == true { return true }
         return store.links[i.id]?.contains { $0.note.localizedCaseInsensitiveContains(query) || store.title($0.otherId).localizedCaseInsensitiveContains(query) } == true
     }
 
@@ -802,6 +821,56 @@ struct TodoView: View {
         }
     }
 
+    private func noteColor(_ status: String) -> Color {
+        switch status {
+        case "done": return .green
+        case "rework", "blocked": return .orange
+        case "started": return .blue
+        default: return .secondary
+        }
+    }
+
+    // "N updates" toggle plus the history of reports an external tool added to this sub-item.
+    @ViewBuilder func timeline(_ sub: SubDraft) -> some View {
+        if let sid = sub.dbId, let list = store.notes[sid], !list.isEmpty {
+            let open = openTimelines.contains(sid)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { if open { openTimelines.remove(sid) } else { openTimelines.insert(sid) } }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("\(list.count) update\(list.count == 1 ? "" : "s")")
+                    Image(systemName: "chevron.right").rotationEffect(.degrees(open ? 90 : 0))
+                }.font(.system(size: 11, weight: .medium)).foregroundStyle(.purple)
+            }.buttonStyle(.plain).padding(.leading, 25)
+            if open {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(list) { n in
+                        let full = openNotes.contains(n.id)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(n.at.formatted(date: .abbreviated, time: .shortened)).foregroundStyle(.tertiary)
+                                Text(n.status.uppercased()).font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                                    .padding(.horizontal, 5).padding(.vertical, 1).background(noteColor(n.status), in: Capsule())
+                                Text(n.author).foregroundStyle(.purple)
+                            }.font(.system(size: 11))
+                            if !n.note.isEmpty {
+                                Text(n.note).font(.system(size: 12)).foregroundStyle(.secondary)
+                                    .lineLimit(full ? nil : 2).fixedSize(horizontal: false, vertical: true)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { if full { openNotes.remove(n.id) } else { openNotes.insert(n.id) } } }
+                    }
+                }
+                .padding(.leading, 12)
+                .overlay(alignment: .leading) { Rectangle().fill(Color.purple.opacity(0.3)).frame(width: 2) }
+                .padding(.leading, 25)
+                .transition(.opacity)
+            }
+        }
+    }
+
     func card(_ i: TodoItem) -> some View {
         let subs = store.subs[i.id] ?? []
         let p = subProgress(subs)
@@ -842,6 +911,7 @@ struct TodoView: View {
                         if !subs.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(subs) { sub in
+                                    VStack(alignment: .leading, spacing: 4) {
                                     Button { store.toggleSub(i, sub) } label: {
                                         HStack(alignment: .firstTextBaseline, spacing: 9) {
                                             SubCheck(on: sub.done).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
@@ -851,6 +921,8 @@ struct TodoView: View {
                                             Spacer(minLength: 0)
                                         }.contentShape(Rectangle())
                                     }.buttonStyle(.plain).disabled(i.deleted)
+                                    timeline(sub)
+                                    }
                                 }
                             }
                             .padding(.top, 8)

@@ -10,6 +10,16 @@ APP=DevHub.app
 rm -rf $APP
 mkdir -p $APP/Contents/MacOS
 cp .build/release/DevHub $APP/Contents/MacOS/DevHub
+# devhub-todo is the same binary in CLI mode; the wrapper resolves its own symlink.
+mkdir -p $APP/Contents/Resources
+cat > $APP/Contents/Resources/devhub-todo <<'WRAP'
+#!/bin/sh
+SELF=$(readlink "$0" || echo "$0")
+exec "$(cd "$(dirname "$SELF")" && pwd)/../MacOS/DevHub" --todo "$@"
+WRAP
+chmod +x $APP/Contents/Resources/devhub-todo
+mkdir -p "$HOME/.local/bin"
+ln -sf "$PWD/$APP/Contents/Resources/devhub-todo" "$HOME/.local/bin/devhub-todo"
 cat > $APP/Contents/Info.plist <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

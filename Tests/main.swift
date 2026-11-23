@@ -1,3 +1,4 @@
+import SQLite3
 import Foundation
 import AppKit
 
@@ -182,6 +183,28 @@ func sidebarBadge() {
     let n = todoAttentionCount([item(past), item(Date()), item(later), item(nil), item(past, done: Date()), item(past, deleted: true)])
     check(n == 2, "sidebar badge: counts open overdue + today only")
 }
-sidebarBadge(); cronNL(); noteLinks(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
+func todoBridge() {
+    let path = NSTemporaryDirectory() + "bridge-\(UUID().uuidString).sqlite"
+    defer { try? FileManager.default.removeItem(atPath: path) }
+    guard let db = try? TodoBridge.open(path) else { check(false, "bridge: open"); return }
+    defer { sqlite3_close(db) }
+    func run(_ a: [String]) -> String {
+        do { return try TodoBridge.execute(try TodoBridge.parse(a), db: db) } catch let f as TodoBridge.Failure { return "ERR " + f.message } catch { return "ERR" }
+    }
+    check(run(["create", "--title", "Release", "--subs", "Step 1 Spec, Step 2 Build"]).hasPrefix("created"), "bridge: create")
+    check(run(["create", "--title", "release", "--subs", "Step 1 Spec,Step 3 Ship"]).contains("+1"), "bridge: create is idempotent and adds only new subs")
+    check(run(["sub", "--todo", "Release", "--step", "Step 1", "--status", "done", "--note", "wrote spec.md"]).hasSuffix("done"), "bridge: prefix match + done")
+    var subs = TodoBridge.subs(db, TodoBridge.findTodo(db, "Release")!.id)
+    check(subs.count == 3 && subs[0].done && !subs[1].done, "bridge: done ticks only that sub-item")
+    _ = run(["sub", "--todo", "Release", "--step", "Step 1 Spec", "--status", "rework", "--note", "AC changed"])
+    subs = TodoBridge.subs(db, TodoBridge.findTodo(db, "Release")!.id)
+    let notes = TodoBridge.loadNotes(db)[subs[0].id] ?? []
+    check(!subs[0].done && notes.count == 2 && notes[0].note == "wrote spec.md" && notes[1].status == "rework", "bridge: rework un-ticks and history is appended in order")
+    check(run(["sub", "--todo", "Release", "--step", "Step", "--status", "done"]).hasPrefix("ERR"), "bridge: ambiguous prefix is rejected")
+    check(run(["sub", "--todo", "Nope", "--step", "Step 1", "--status", "done"]).hasPrefix("ERR"), "bridge: unknown todo is rejected")
+    check((try? TodoBridge.parse(["sub", "--todo", "x", "--step", "y", "--status", "bogus"])) == nil, "bridge: invalid status rejected at parse")
+    check(run(["status", "--todo", "Release"]).contains("[ ] Step 1 Spec (rework)"), "bridge: status report shows latest status")
+}
+todoBridge(); sidebarBadge(); cronNL(); noteLinks(); dueDates(); ptyPassword(); hexAndSearch(); userPath(); liveEditor(); sqlFormat(); csvAndInsert(); jsonToTypeScript(); objectId(); timestamp()
 print(failures == 0 ? "ALL TESTS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

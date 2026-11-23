@@ -17,6 +17,9 @@ SwiftPM executable `DevHub`, sources in `Sources/DevHub/`.
 | `Clipboard.swift` | `ClipStore` (SQLite `clipboard.sqlite` + `ClipImages/`, retention, type classification), view, Carbon global hotkey (⌃⌥K) |
 | `ToolsView.swift`, `ToolsExtra.swift`, `Converters.swift` | All dev tools |
 
+## Todo CLI bridge
+`TodoBridge.swift` owns the todo schema (`ensureSchema`, incl. `todo_sub_notes`) and the write operations. The app binary doubles as the CLI: `Launcher.main` (in `DevHubApp.swift`) runs `TodoBridge.runIfRequested` for `DevHub --todo ...` and exits before any GUI starts; `build.sh` ships a `devhub-todo` wrapper and symlinks it into `~/.local/bin`. `TodoStore` watches `todos.sqlite` (DispatchSource, 300ms debounce) and reloads when another process writes. The bridge is tool-agnostic: it knows nothing about who calls it.
+
 ## Re-auth flow
 Each profile runs its command through `/usr/bin/script -q /dev/null zsh -lc <cmd>` so a PTY exists. Output is matched against per-profile regexes (defaults: `Password:`, `reauthenticat`, `SASL authentication failed`, `Unauthorized`, `session expired`). On match: state becomes `needsReauth`, a notification is shown (`osascript`), and the saved password from Keychain is written to stdin.
 

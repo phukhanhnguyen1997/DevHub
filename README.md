@@ -6,6 +6,13 @@ Native macOS (SwiftUI) developer utility: tunnel manager, markdown notes with Cm
 - **Connections**: manage `cloud-sql-proxy` / `gcloud compute start-iap-tunnel` commands; connect/disconnect per profile or group; status, logs, port-conflict detection; auto re-auth (password from Keychain injected via PTY, global Google work password via the shield button, auto `gcloud auth login` on expiry); auto-start, restore last session, recover after wake/network change; gcloud/ADC expiry banner; import/export profiles; copy connection strings.
 - **Notes**: note chips on top, sticky table of contents, links menu, grouped ⌘K results, Notion-style Page editor (`/` menu, live styling, 5s autosave), import/create `.md`, FTS5 search, tags, pin, outline, `[[wiki links]]`, backlinks, block-based editor, "Make profile" from shell code blocks.
 - **Todos**: List (by date or priority) / Board (To do, Doing, Done, drag and drop) / Calendar (month, week) layouts, collapsible cards with Expand all / Collapse all, todo list with a detail modal (title, description, sub-item checklist with live % progress, DONE button enabled only when every sub-item is ticked, links to other todos with searchable notes), priority and due date, permanent SQLite storage (`todos.sqlite`, soft delete only), Done log grouped by day, full Activity log, search and date-range filter (today to all time, or custom).
+- **Todo CLI** (`devhub-todo`, installed to `~/.local/bin` by `build.sh`): any script or agent can create a todo with sub-items and append timestamped reports per sub-item; the Todos tab updates live and shows them as a per-sub-item timeline (long notes clamp to 2 lines, tap to expand; notes are searchable).
+  ```
+  devhub-todo create --title "Release" --subs "Step 1,Step 2"
+  devhub-todo sub --todo "Release" --step "Step 1" --status done --note "Wrote docs/spec.md"
+  devhub-todo status --todo "Release"
+  ```
+  `--status` is `started|done|rework|blocked|note` (`done` ticks the sub-item, `rework`/`blocked`/`started` un-tick it; `started` moves the todo to Doing). The todo DONE button stays a human decision. `--note -` reads stdin, `--author` labels the writer, `DEVHUB_TODO_DB` overrides the database path.
 - **Clipboard**: SQLite-backed history (text, images, files), filter by type (Text/Image/File/Link/Email/Color), retention 1d/3d/7d/14d/1 month (pinned kept), pin, search, sensitive content masked.
 - **DB Query**: read-only psql/mysql queries, saved queries.
 - **Ports / Vault**: listening ports; Keychain-backed secrets.
