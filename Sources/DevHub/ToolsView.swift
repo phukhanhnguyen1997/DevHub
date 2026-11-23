@@ -18,75 +18,180 @@ struct ToolsView: View {
 
     var kind: ToolKind { app.toolKind }
 
-    private var toolPicker: some View {
-        HStack {
-            Picker("Tool", selection: $app.toolKind) { ForEach(ToolKind.allCases) { Text($0.rawValue).tag($0) } }
-                .pickerStyle(.menu).frame(width: 260)
+    @AppStorage("pinnedTools") private var pinnedRaw = "JSON Format,JWT,Unix Timestamp"
+    @State private var toolSearch = ""
+
+    private var pinned: [ToolKind] { pinnedRaw.split(separator: ",").compactMap { ToolKind(rawValue: String($0)) } }
+    private func togglePin(_ k: ToolKind) {
+        var l = pinned
+        if let i = l.firstIndex(of: k) { l.remove(at: i) } else { l.append(k) }
+        pinnedRaw = l.map(\.rawValue).joined(separator: ",")
+    }
+
+    private static let groups: [(String, [ToolKind])] = [
+        ("Format", [.json, .yaml, .csv, .ts, .sql]),
+        ("Encode", [.base64, .url, .hex, .hash, .jwt]),
+        ("Generate", [.uuid, .password]),
+        ("Time & text", [.time, .cron, .regex, .diff]),
+    ]
+
+    private func railRow(_ k: ToolKind) -> some View {
+        let on = k == kind
+        return Text(k.rawValue).lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(on ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .foregroundStyle(on ? Color.accentColor : .primary)
+            .fontWeight(on ? .semibold : .regular)
+            .contentShape(Rectangle())
+            .onTapGesture { app.toolKind = k }
+            .contextMenu {
+                Button(pinned.contains(k) ? "Unpin" : "Pin to top") { togglePin(k) }
+            }
+    }
+
+    private func railSection(_ title: String, _ items: [ToolKind]) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary).padding(.horizontal, 8).padding(.top, 8)
+            ForEach(items) { railRow($0) }
+        }
+    }
+
+    private var rail: some View {
+        let q = toolSearch.trimmingCharacters(in: .whitespaces).lowercased()
+        let match: (ToolKind) -> Bool = { q.isEmpty || $0.rawValue.lowercased().contains(q) }
+        return VStack(spacing: 6) {
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Find tool", text: $toolSearch).textFieldStyle(.plain)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.line))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    let pins = pinned.filter(match)
+                    if !pins.isEmpty { railSection("★ Pinned", pins) }
+                    ForEach(Self.groups, id: \.0) { g in
+                        let items = g.1.filter(match)
+                        if !items.isEmpty { railSection(g.0, items) }
+                    }
+                }
+            }
+            Text("Right-click a tool to pin").font(.caption2).foregroundStyle(.tertiary)
+        }
+        .font(.callout)
+        .padding(10)
+        .frame(width: 190)
+        .background(Color.primary.opacity(0.03))
+    }
+
+    private func header(_ extras: some View = EmptyView()) -> some View {
+        HStack(spacing: 10) {
+            Text(kind.rawValue).font(.title3.weight(.semibold)).lineLimit(1).fixedSize()
+            extras
             Spacer()
         }
     }
 
     var body: some View {
-        if [.password, .uuid, .diff, .time].contains(kind) {
-            VStack(alignment: .leading) {
-                toolPicker
-                switch kind {
-                case .password: PasswordGenView()
-                case .uuid: IDGenView()
-                case .time: TimeToolView()
-                default: DiffView()
-                }
-            }.padding()
-        } else { mainBody }
+        HStack(spacing: 0) {
+            rail
+            Divider()
+            Group {
+                if [.password, .uuid, .diff, .time].contains(kind) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        header()
+                        switch kind {
+                        case .password: PasswordGenView()
+                        case .uuid: IDGenView()
+                        case .time: TimeToolView()
+                        default: DiffView()
+                        }
+                    }.padding()
+                } else { mainBody }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private var inputHint: String {
+        kind == .time ? "Epoch (seconds or ms) or ISO-8601 - empty = now"
+        : kind == .cron ? (cronMode == "Cron → English" ? "Cron expression (5 fields)" : "Describe the schedule, e.g. every weekday at 8:30am")
+        : "Input"
+    }
+
+    private var options: some View {
+        HStack {
+            if kind == .csv {
+                Picker("", selection: $csvMode) {
+                    ForEach(["CSV → JSON", "JSON → CSV", "CSV → INSERT", "JSON → INSERT"], id: \.self) { Text($0) }
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 380)
+                if csvMode.hasSuffix("INSERT") { TextField("Table name", text: $extra).textFieldStyle(.roundedBorder).frame(width: 140) }
+            }
+            if [.base64, .url, .hex].contains(kind) { Toggle(kind == .hex ? "Hex → Text" : "Decode", isOn: $decode).toggleStyle(.switch) }
+            if kind == .cron {
+                Picker("", selection: $cronMode) { ForEach(["Cron → English", "English → Cron"], id: \.self) { Text($0) } }
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 300)
+            }
+            if kind == .regex { TextField("Regex pattern", text: $extra).textFieldStyle(.roundedBorder) }
+        }
+    }
+
+    private var statusLine: String {
+        let n = output.utf8.count
+        return output.isEmpty ? "" : "\(n) B · \(output.split(separator: "\n", omittingEmptySubsequences: false).count) lines"
     }
 
     var mainBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            toolPicker
-            HStack {
-                if kind == .csv {
-                    Picker("", selection: $csvMode) {
-                        ForEach(["CSV → JSON", "JSON → CSV", "CSV → INSERT", "JSON → INSERT"], id: \.self) { Text($0) }
-                    }.pickerStyle(.segmented)
-                    if csvMode.hasSuffix("INSERT") { TextField("Table name", text: $extra).textFieldStyle(.roundedBorder).frame(width: 160) }
+            header(options)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(inputHint).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Spacer()
+                        Button("Paste") { input = NSPasteboard.general.string(forType: .string) ?? input }
+                        Button("Clear") { input = "" }.disabled(input.isEmpty)
+                    }.buttonStyle(.borderless).font(.caption)
+                    TextEditor(text: $input).font(.system(.body, design: .monospaced))
+                        .padding(4).background(Theme.card, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.line))
                 }
-                if [.base64, .url, .hex].contains(kind) { Toggle(kind == .hex ? "Hex → Text" : "Decode", isOn: $decode).toggleStyle(.switch) }
-                if kind == .cron {
-                    Picker("", selection: $cronMode) { ForEach(["Cron → English", "English → Cron"], id: \.self) { Text($0) } }
-                        .pickerStyle(.segmented).frame(width: 300)
-                }
-                if kind == .regex { TextField("Regex pattern", text: $extra).textFieldStyle(.roundedBorder) }
-            }
-            Text(kind == .time ? "Epoch (seconds or ms) or ISO-8601 - empty = now" : kind == .cron ? (cronMode == "Cron → English" ? "Cron expression (5 fields)" : "Describe the schedule in English, e.g. every weekday at 8:30am")  : "Input").font(.caption).foregroundStyle(.secondary)
-            TextEditor(text: $input).font(.system(.body, design: .monospaced)).frame(minHeight: 140).border(.gray.opacity(0.4))
-            HStack {
-                Text("Output").font(.caption).foregroundStyle(.secondary)
-                if kind == .json || kind == .yaml {
-                    HStack(spacing: 4) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField("Search output (key or value)", text: $search).textFieldStyle(.plain).frame(width: 220)
-                        if !search.isEmpty { Text("\(OutputSearch.count(output, search)) matches").font(.caption).foregroundStyle(.secondary) }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text("Output").font(.caption).foregroundStyle(.secondary)
+                        if kind == .json || kind == .yaml {
+                            HStack(spacing: 4) {
+                                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                                TextField("Search output", text: $search).textFieldStyle(.plain).frame(minWidth: 80, maxWidth: 160)
+                                if !search.isEmpty { Text("\(OutputSearch.count(output, search))").font(.caption).foregroundStyle(.secondary) }
+                            }
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Theme.card, in: RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.line))
+                            Toggle("Only matches", isOn: $onlyMatches).toggleStyle(.checkbox).font(.caption)
+                        }
+                        Spacer()
+                        Button("⇄ Swap") { input = output }.disabled(output.isEmpty)
+                        if kind == .cron && cronMode == "English → Cron", let r = CronNL.parse(input) {
+                            Button("Copy expr") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(r.expr, forType: .string)
+                            }
+                        }
+                        Button("Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(output, forType: .string)
+                        }
+                    }.buttonStyle(.borderless).font(.caption)
+                    ScrollView {
+                        Text(shownOutput).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading).padding(8)
                     }
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.line))
-                    Toggle("Only matching lines", isOn: $onlyMatches).toggleStyle(.checkbox).font(.caption)
-                }
-                Spacer()
-                if kind == .cron && cronMode == "English → Cron", let r = CronNL.parse(input) {
-                    Button("Copy expression") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(r.expr, forType: .string)
-                    }
-                }
-                Button("Copy") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(output, forType: .string)
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.line))
                 }
             }
-            ScrollView {
-                Text(shownOutput).font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-            }.padding(6).background(.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+            Text(statusLine).font(.caption).foregroundStyle(.tertiary)
         }.padding()
     }
 

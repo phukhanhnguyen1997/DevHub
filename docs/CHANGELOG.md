@@ -4,6 +4,8 @@ Newest first. Hashes refer to git commits.
 
 ## Unreleased
 
+- Tools redesign (bmad-ux, direction B): left rail with search and groups (Format / Encode / Generate / Time & text) replaces the dropdown; right-click to pin tools to the top; Input and Output side by side; Paste / Clear / Swap buttons and a size/lines status. See docs/ux/tools-redesign/.
+
 - Fix: tunnel stayed on "Re-auth needed" after a successful re-auth. gcloud's "Reauthentication successful" matched the re-auth pattern; now it and "Listening on port" clear the warning (state becomes Running).
 
 - ⌘K animation (bmad-ux, direction B): results slide in with a stagger, a single selection bar glides between rows, matched keywords are highlighted. After Enter on a note, the editor fades in, scrolls smoothly to the match and flashes an orange highlight (code blocks pulse an orange border). See docs/ux/cmdk-animation/.

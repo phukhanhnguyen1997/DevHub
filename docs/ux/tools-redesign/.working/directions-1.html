@@ -1,0 +1,62 @@
+<!doctype html><meta charset=utf-8><title>Tools redesign – 3 directions</title>
+<style>
+body{font:14px -apple-system,system-ui;background:#eceae6;margin:0;padding:24px;color:#222}
+h1{font-size:20px}h2{font-size:15px;margin:28px 0 4px}p.n{margin:0 0 10px;color:#555;max-width:900px}
+.win{display:flex;width:940px;height:420px;background:#faf9f7;border-radius:10px;box-shadow:0 4px 20px #0003;overflow:hidden;border:1px solid #d8d5cf}
+.side{width:150px;background:#e6e3de;padding:10px;font-size:12px}.side div{padding:5px 8px;border-radius:5px}.side .on{background:#cfcbc4}
+.main{flex:1;padding:14px;overflow:hidden;position:relative}
+.chip{display:inline-block;padding:3px 10px;border-radius:99px;background:#e8e5df;font-size:12px;margin:2px}
+.chip.on{background:#2f6fed;color:#fff}.card{background:#fff;border:1px solid #ddd9d2;border-radius:10px;padding:10px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+.grid .card{height:62px;font-size:12px}.grid b{display:block;font-size:13px;margin-bottom:3px}
+.search{background:#fff;border:1px solid #d8d5cf;border-radius:8px;padding:7px 10px;color:#888;font-size:13px}
+.mono{font:12px ui-monospace,Menlo,monospace}.col{display:flex;gap:10px}.col>div{flex:1}
+pre{margin:0;background:#fff;border:1px solid #ddd9d2;border-radius:8px;padding:8px;height:210px;overflow:hidden;font:12px ui-monospace,Menlo,monospace}
+.lbl{font-size:11px;color:#777;text-transform:uppercase;letter-spacing:.05em;margin:8px 0 4px}
+.rail{width:200px;border-right:1px solid #ddd9d2;background:#f3f1ed;padding:10px;font-size:12px}
+.rail div.i{padding:5px 8px;border-radius:5px}.rail .on{background:#2f6fed22;color:#1f4fb5;font-weight:600}.rail .g{color:#999;font-size:10px;margin:10px 0 3px;text-transform:uppercase}
+.btn{display:inline-block;padding:3px 9px;border:1px solid #cfcbc4;border-radius:6px;background:#fff;font-size:12px}
+.hit{background:#ffe27a}
+</style>
+<h1>Tools – 3 hướng thiết kế</h1>
+
+<h2>A · Gallery (lưới công cụ) → mở tool</h2>
+<p class=n>Màn đầu là lưới thẻ chia theo nhóm, có ô tìm tool, ★ yêu thích và "Dùng gần đây". Bấm thẻ mở tool toàn màn hình (có nút ← Back). Hợp khi có nhiều tool và bạn không nhớ tên.</p>
+<div class=win><div class=side><div>Notes</div><div>Connections</div><div>Todos</div><div>Clipboard</div><div>DB Query</div><div>Ports</div><div>Vault</div><div class=on>Tools</div></div>
+<div class=main><div class=search>🔍 Tìm tool…  (JSON, jwt, epoch…)</div>
+<div class=lbl>★ Yêu thích / gần đây</div><span class=chip>JSON Format</span><span class=chip>JWT</span><span class=chip>Unix Timestamp</span><span class=chip>Base64</span>
+<div class=lbl>Format & Convert</div>
+<div class=grid><div class=card><b>{ } JSON Format</b>Pretty / minify</div><div class=card><b>CSV ⇄ JSON</b>+ INSERT</div><div class=card><b>JSON → TS</b>Interface</div><div class=card><b>SQL format</b></div></div>
+<div class=lbl>Encode & Security</div>
+<div class=grid><div class=card><b>Base64</b></div><div class=card><b>JWT</b>Decode</div><div class=card><b>Hash</b>MD5/SHA</div><div class=card><b>Password</b>Generator</div></div>
+<div class=lbl>Time & Text</div>
+<div class=grid><div class=card><b>Timestamp</b></div><div class=card><b>Cron</b></div><div class=card><b>Regex</b></div><div class=card><b>Diff</b></div></div>
+</div></div>
+
+<h2>B · Rail + Split pane (khuyên dùng nếu hay đổi qua lại giữa các tool)</h2>
+<p class=n>Cột trái trong Tools: danh sách tool theo nhóm + ô tìm + ★ ghim (luôn thấy, đổi tool 1 click, thay Picker dạng menu hiện tại). Bên phải: Input | Output cạnh nhau, thanh tuỳ chọn gọn trên đầu, Copy / Swap / Clear, tìm trong output có tô vàng.</p>
+<div class=win><div class=side><div>Notes</div><div>Connections</div><div>Todos</div><div>Clipboard</div><div>DB Query</div><div>Ports</div><div>Vault</div><div class=on>Tools</div></div>
+<div class=rail><div class=search style="padding:4px 8px">🔍 Tìm…</div>
+<div class=g>★ Ghim</div><div class="i on">{ } JSON Format</div><div class=i>JWT</div>
+<div class=g>Format</div><div class=i>CSV / JSON / INSERT</div><div class=i>JSON → TypeScript</div><div class=i>SQL format</div>
+<div class=g>Encode</div><div class=i>Base64</div><div class=i>URL</div><div class=i>Hex ↔ Text</div><div class=i>Hash</div>
+<div class=g>Time & Text</div><div class=i>Timestamp</div><div class=i>Cron</div><div class=i>Regex</div></div>
+<div class=main><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">JSON Format</b><span><span class=btn>Pretty</span> <span class=btn>Minify</span> <span class=btn>⇄ Swap</span> <span class=btn>Paste</span></span></div>
+<div class=col style="margin-top:8px"><div><div class=lbl>Input</div><pre>{"user":{"id":42,"name":"Khanh",
+"roles":["dev","ops"]}}</pre></div>
+<div><div class=lbl>Output · 3 matches 🔍 <span class=hit>user</span> <span class=btn style="float:right">Copy</span></div><pre>{
+  "<span class=hit>user</span>": {
+    "id": 42,
+    "name": "Khanh",
+    "roles": ["dev","ops"]
+  }
+}</pre></div></div>
+<div class=lbl>✓ Valid JSON · 54 B · 7 lines</div></div></div>
+
+<h2>C · Smart paste (tự nhận dạng)</h2>
+<p class=n>Một ô dán duy nhất ở trên cùng. App tự đoán loại (JSON, JWT, epoch, base64, cron…) và hiện chip gợi ý + kết quả ngay bên dưới, không cần chọn tool trước. Vẫn có lưới tool nhỏ để chọn tay.</p>
+<div class=win><div class=side><div>Notes</div><div>Connections</div><div>Todos</div><div>Clipboard</div><div>DB Query</div><div>Ports</div><div>Vault</div><div class=on>Tools</div></div>
+<div class=main><div class=search style="color:#222;font:12px ui-monospace">eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiIsImV4cCI6MTc2NDAwMDAwMH0.sig…</div>
+<div style="margin-top:8px">Nhận dạng: <span class="chip on">JWT</span><span class=chip>Base64</span><span class=chip>Hash</span> <span style="color:#888;font-size:12px">· Tools khác: JSON · Timestamp · URL · Cron …</span></div>
+<div class=col style="margin-top:8px"><div class=card><div class=lbl>Header</div><span class=mono>{"alg":"HS256"}</span><div class=lbl>Payload</div><span class=mono>{"sub":"42","exp":1764000000}</span></div>
+<div class=card><div class=lbl>exp</div>25 Nov 2025 · 16:00 UTC<br><span style="color:#c33">⚠ đã hết hạn</span><div class=lbl>Gợi ý tiếp</div><span class=chip>→ Timestamp</span><span class=chip>→ JSON</span></div></div></div></div>
