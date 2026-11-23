@@ -15,20 +15,20 @@ h1{font-size:20px}h2{font-size:15px;margin:26px 0 4px}p{margin:0 0 10px;color:#5
 </style>
 <h1>Todo do AI cập nhật – cách hiện note</h1>
 <h2>A · Dòng note thu gọn dưới sub-item</h2><p>Mỗi sub-item có thêm 1 dòng xám (tối đa 2 dòng), nhãn tím "AI" + giờ. Bấm vào để mở rộng xem đầy đủ. Đường dẫn file là chip bấm được (mở Finder / copy).</p>
-<div class=card><div class=t><span>PROJ-123 · ai-plan</span><span style="color:#34c759">42%</span></div><div class=bar><i></i></div>
-<div class=sub><span class="ck d">✓</span><div><b>DEV-1 Story</b><span class=ai>AI · 09:12</span><div class=note>Parsed story, 4 AC → <span class=mono>ai-plan/PROJ-123/story.md</span></div></div></div>
-<div class=sub><span class="ck d">✓</span><div><b>DEV-2 Spec</b><span class=ai>AI · 09:40</span><div class=note>Wrote spec with 6 scenarios → <span class=mono>spec.md</span> …</div></div></div>
-<div class=sub><span class="ck w"></span><div><b>DEV-3 Gap check</b><span class=ai>AI · running</span></div></div>
-<div class=sub><span class=ck></span><div><b>DEV-4 Cross review</b></div></div></div>
+<div class=card><div class=t><span>Release checklist</span><span style="color:#34c759">42%</span></div><div class=bar><i></i></div>
+<div class=sub><span class="ck d">✓</span><div><b>Step 1 Story</b><span class=ai>AI · 09:12</span><div class=note>Parsed story, 4 AC → <span class=mono>docs/story.md</span></div></div></div>
+<div class=sub><span class="ck d">✓</span><div><b>Step 2 Spec</b><span class=ai>AI · 09:40</span><div class=note>Wrote spec with 6 scenarios → <span class=mono>spec.md</span> …</div></div></div>
+<div class=sub><span class="ck w"></span><div><b>Step 3 Gap check</b><span class=ai>AI · running</span></div></div>
+<div class=sub><span class=ck></span><div><b>Step 4 Cross review</b></div></div></div>
 
 <h2>B · Timeline hoạt động (đầy đủ lịch sử từng step)</h2><p>Mỗi sub-item mở ra danh sách các lần AI báo cáo (có giờ), theo kiểu comment. Phù hợp khi một step có nhiều vòng sửa (rework), vì giữ được lịch sử.</p>
-<div class=card><div class=t><span>PROJ-123 · ai-plan</span><span style="color:#34c759">42%</span></div><div class=bar><i></i></div>
-<div class=sub><span class="ck d">✓</span><div><b>DEV-2 Spec</b> <span style="color:#999">· 2 updates ▾</span>
+<div class=card><div class=t><span>Release checklist</span><span style="color:#34c759">42%</span></div><div class=bar><i></i></div>
+<div class=sub><span class="ck d">✓</span><div><b>Step 2 Spec</b> <span style="color:#999">· 2 updates ▾</span>
 <div class=tl><div><span class=tm>09:31</span> Draft spec <span class=mono>spec.md</span></div><div><span class=tm>09:40</span> Revised after review: +2 edge cases <span class=mono>spec.md#L40</span></div></div></div></div>
-<div class=sub><span class="ck w"></span><div><b>DEV-3 Gap check</b></div></div></div>
+<div class=sub><span class="ck w"></span><div><b>Step 3 Gap check</b></div></div></div>
 
 <h2>C · Note + panel "AI report" khi chọn sub-item</h2><p>Sub-item chỉ hiện dòng ngắn 1 dòng + chấm tím. Bấm mở khung báo cáo đầy đủ bên dưới (cuộn nếu dài, nút Copy), nội dung tự đổi theo step được chọn.</p>
-<div class=card><div class=t><span>PROJ-123 · ai-plan</span><span style="color:#34c759">42%</span></div><div class=bar><i></i></div>
-<div class=sub><span class="ck d">✓</span><div><b>DEV-1 Story</b> <span class=ai>●</span></div></div>
-<div class=sub style="background:#f7f5ff;border-radius:6px"><span class="ck d">✓</span><div style="flex:1"><b>DEV-2 Spec</b><div class=box><b>AI report · 09:40</b><br>Wrote 6 scenarios. Files: <span class=mono>ai-plan/PROJ-123/spec.md</span>, <span class=mono>dev-note.md</span><br>Open question: pagination limit?<br><span style="color:#6b3fd1">Copy · Open file</span></div></div></div>
-<div class=sub><span class="ck w"></span><div><b>DEV-3 Gap check</b></div></div></div>
+<div class=card><div class=t><span>Release checklist</span><span style="color:#34c759">42%</span></div><div class=bar><i></i></div>
+<div class=sub><span class="ck d">✓</span><div><b>Step 1 Story</b> <span class=ai>●</span></div></div>
+<div class=sub style="background:#f7f5ff;border-radius:6px"><span class="ck d">✓</span><div style="flex:1"><b>Step 2 Spec</b><div class=box><b>AI report · 09:40</b><br>Wrote 6 scenarios. Files: <span class=mono>docs/spec.md</span>, <span class=mono>dev-note.md</span><br>Open question: pagination limit?<br><span style="color:#6b3fd1">Copy · Open file</span></div></div></div>
+<div class=sub><span class="ck w"></span><div><b>Step 3 Gap check</b></div></div></div>
