@@ -41,8 +41,38 @@ struct LiveTextEditor: NSViewRepresentable {
             context.coordinator.shown = tok
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 tv.setSelectedRange(r)
-                tv.scrollRangeToVisible(r)
-                tv.showFindIndicator(for: r)
+                Self.glideAndFlash(tv, r)
+            }
+        }
+    }
+
+    // Smoothly scrolls the enclosing SwiftUI scroll view to the match, then pulses an orange highlight that fades out.
+    static func glideAndFlash(_ tv: NSTextView, _ r: NSRange) {
+        guard let lm = tv.layoutManager, let tc = tv.textContainer else { tv.scrollRangeToVisible(r); return }
+        let glyphs = lm.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+        var rect = lm.boundingRect(forGlyphRange: glyphs, in: tc)
+        rect.origin.x += tv.textContainerOrigin.x
+        rect.origin.y += tv.textContainerOrigin.y
+        if let sv = tv.enclosingScrollView, let doc = sv.documentView, doc.isFlipped {
+            let clip = sv.contentView
+            let inDoc = tv.convert(rect, to: doc)
+            let y = max(0, min(inDoc.midY - clip.bounds.height / 3, doc.bounds.height - clip.bounds.height))
+            NSAnimationContext.runAnimationGroup({ c in
+                c.duration = 0.5
+                c.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                clip.animator().setBoundsOrigin(NSPoint(x: clip.bounds.origin.x, y: y))
+            }, completionHandler: { sv.reflectScrolledClipView(clip) })
+        } else {
+            tv.scrollRangeToVisible(r)
+        }
+        let steps = 24
+        for i in 0...steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35 + Double(i) * 0.07) { [weak tv] in
+                guard let lm = tv?.layoutManager, NSMaxRange(r) <= (tv?.string.utf16.count ?? 0) else { return }
+                if i == steps { lm.removeTemporaryAttribute(.backgroundColor, forCharacterRange: r); return }
+                let t = Double(i) / Double(steps)
+                let alpha = 0.85 * (1 - t) * (0.6 + 0.4 * cos(t * 4 * .pi))
+                lm.addTemporaryAttribute(.backgroundColor, value: NSColor.systemOrange.withAlphaComponent(alpha), forCharacterRange: r)
             }
         }
     }

@@ -1,0 +1,36 @@
+<!doctype html><meta charset=utf-8><title>⌘K animation</title><style>
+*{box-sizing:border-box;font-family:-apple-system,sans-serif}body{margin:0;padding:24px;background:#e4e4ea;font-size:13px}
+h1{font-size:20px}h2{font-size:15px;margin:0}p{color:#555;margin:2px 0 8px;max-width:620px}
+.row{display:flex;gap:24px;flex-wrap:wrap}.box{width:400px;height:330px;background:#c9c9d4;border-radius:12px;position:relative;overflow:hidden}
+.pal{position:absolute;left:20px;top:20px;width:360px;background:#fff;border-radius:12px;box-shadow:0 14px 40px #0004;padding:8px;overflow:hidden}
+.q{padding:8px;font-size:15px;border-bottom:1px solid #eee;min-height:36px}.q i{border-left:2px solid #0a7aff;margin-left:1px;animation:bl 1s steps(1) infinite}@keyframes bl{50%{opacity:0}}
+.sec{font-size:10px;font-weight:700;letter-spacing:.05em;color:#888;padding:8px 8px 2px}
+.r{padding:7px 8px;border-radius:7px;position:relative;z-index:1}.r small{display:block;color:#888}
+mark{background:#ffe27a;border-radius:3px;padding:0 1px}
+.sel{position:absolute;left:8px;right:8px;height:38px;background:#dce9ff;border-radius:7px;z-index:0;transition:top .18s cubic-bezier(.3,.8,.3,1)}
+.list{position:relative}
+/* A */.A.on .pal{animation:pop .22s cubic-bezier(.2,.9,.3,1.2)}@keyframes pop{from{opacity:0;transform:scale(.95) translateY(-8px)}}
+.A .r.in{animation:in .22s both}@keyframes in{from{opacity:0;transform:translateY(6px)}}
+.A mark.f{animation:fl .6s}@keyframes fl{from{background:#ff9f0a}}
+/* B */.B .r.in{animation:in2 .2s both}@keyframes in2{from{opacity:0;transform:translateX(-10px)}}
+.B mark{animation:fl 0.7s}
+/* C */.C .list{transition:opacity .12s}.C .list.sw{opacity:.25}
+</style>
+<h1>⌘K animation: 3 directions (live demo, loops)</h1>
+<div class=row>
+<div><h2>A · Pop + stagger</h2><p>Palette scales in; each result slides up with a 30ms stagger; matched letters flash orange then settle to yellow.</p><div class="box"><div class="pal A" id=a></div></div></div>
+<div><h2>B · Slide + moving selection</h2><p>Results slide in from the left; the blue selection bar glides between rows (arrow keys) instead of jumping.</p><div class="box"><div class="pal B" id=b></div></div></div>
+<div><h2>C · Calm crossfade</h2><p>Minimal: list dims and crossfades when the query changes; matches highlighted. Least motion.</p><div class="box"><div class="pal C" id=c></div></div></div>
+</div>
+<script>
+const data=[["Notes",[["Kafka reauth runbook","#runbook"],["Kafka consumer lag","#kafka"]]],["Inside notes",[["…tunnel asks for re-authentication…","Kafka reauth runbook"]]],["Actions",[["Connect kafka-prod","Connections"]]]];
+function hl(t,q){return q?t.replace(new RegExp("("+q+")","ig"),"<mark class=f>$1</mark>"):t}
+function render(id,q,kind,sel){const el=document.getElementById(id);let i=0,h='<div class=q>'+q+'<i></i></div><div class=list>';
+if(kind=="B")h+='<div class=sel style="top:'+(sel*38+22)+'px"></div>';
+for(const[s,rs]of data){h+='<div class=sec>'+s.toUpperCase()+'</div>';for(const[t,sub]of rs){h+='<div class="r in" style="animation-delay:'+(kind=="C"?0:i*30)+'ms">'+hl(t,q)+'<small>'+sub+'</small></div>';i++}}
+el.innerHTML=h+'</div>'}
+const qs=["k","ka","kaf","kafk","kafka"];let n=0;
+setInterval(()=>{const q=qs[n%qs.length];const sel=Math.floor(n/qs.length)%3;
+for(const[id,k]of[["a","A"],["b","B"],["c","C"]])render(id,q,k,n>=4?sel:0);
+if(n%5==0){const p=document.getElementById("a");p.classList.remove("on");void p.offsetWidth;p.classList.add("on")}n++},900)
+</script>

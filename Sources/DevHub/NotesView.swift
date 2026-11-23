@@ -15,6 +15,7 @@ struct NotesView: View {
     @State private var mode: NoteMode = .edit
     @State private var lastSaved: Date?
     @State private var find: FindRequest?
+    @State private var arrived = true
     private let autosave = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var ordered: [NoteHit] { notes.all.filter { pinned.contains($0.path) } + notes.all.filter { !pinned.contains($0.path) } }
@@ -65,6 +66,8 @@ struct NotesView: View {
         if term.isEmpty { return }
         mode = .edit
         load(path)
+        arrived = false
+        DispatchQueue.main.async { withAnimation(.easeOut(duration: 0.4)) { arrived = true } }
         DispatchQueue.main.async { find = FindRequest(term: term) }
     }
 
@@ -138,7 +141,9 @@ struct NotesView: View {
                         case .split:
                             HSplitView { BlockEditor(text: $text).id(sel).frame(minWidth: 280); previewPane.frame(minWidth: 280) }
                         }
-                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(arrived ? 1 : 0).offset(y: arrived ? 0 : 14)
                     if mode == .edit || mode == .preview { tocRail }
                 }
                 statusBar(sel)
@@ -331,9 +336,10 @@ struct PaletteView: View {
     @State private var query = ""
     @State private var index = 0
     @FocusState private var focused: Bool
+    @Namespace private var selection
 
     struct Item: Identifiable {
-        let id = UUID()
+        var id: String { section + "|" + title + "|" + subtitle }
         let title: String
         let subtitle: String
         let icon: String
@@ -434,17 +440,25 @@ struct PaletteView: View {
                         HStack {
                             Image(systemName: it.icon).frame(width: 22)
                             VStack(alignment: .leading) {
-                                Text(it.title)
-                                Text(it.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(Self.highlighted(it.title, query))
+                                Text(Self.highlighted(it.subtitle, query)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
                         }
                         .padding(8)
-                        .background(i == index ? Color.accentColor.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                        .background {
+                            if i == index {
+                                RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.25))
+                                    .matchedGeometryEffect(id: "selection", in: selection)
+                            }
+                        }
                         .contentShape(Rectangle())
+                        .modifier(SlideIn(delay: Double(min(i, 8)) * 0.03))
                         .onTapGesture { it.run(); dismiss() }
                     }
-                }.padding(6)
+                }
+                .padding(6)
+                .animation(.spring(response: 0.28, dampingFraction: 0.85), value: index)
             }
         }
         .frame(width: 560, height: 380)
@@ -454,9 +468,31 @@ struct PaletteView: View {
         .onKeyPress(.escape) { dismiss(); return .handled }
     }
 
+    static func highlighted(_ s: String, _ q: String) -> AttributedString {
+        var a = AttributedString(s)
+        for w in q.split(separator: " ") where !w.isEmpty {
+            var from = a.startIndex
+            while from < a.endIndex, let r = a[from...].range(of: String(w), options: [.caseInsensitive, .diacriticInsensitive]) {
+                a[r].backgroundColor = .yellow.opacity(0.45)
+                from = r.upperBound
+            }
+        }
+        return a
+    }
+
     private func run(_ list: [Item]) {
         guard index < list.count else { return }
         list[index].run()
         dismiss()
+    }
+}
+
+// Rows slide in from the left the first time they appear (stagger via `delay`).
+struct SlideIn: ViewModifier {
+    let delay: Double
+    @State private var shown = false
+    func body(content: Content) -> some View {
+        content.opacity(shown ? 1 : 0).offset(x: shown ? 0 : -14)
+            .onAppear { withAnimation(.easeOut(duration: 0.2).delay(delay)) { shown = true } }
     }
 }

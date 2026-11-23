@@ -68,6 +68,7 @@ struct BlockEditor: View {
     var find: FindRequest?
     @State private var segs: [Seg] = []
     @State private var hit: (seg: UUID, range: NSRange, token: UUID)?
+    @State private var glow: UUID?
 
     private func locate(_ req: FindRequest) {
         let words = req.term.split(separator: " ").map(String.init)
@@ -85,7 +86,7 @@ struct BlockEditor: View {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach($segs) { $seg in
                     if seg.isCode {
-                        CodeEditorCard(seg: $seg) { segs.removeAll { $0.id == seg.id } }
+                        CodeEditorCard(seg: $seg, glow: glow == seg.id) { segs.removeAll { $0.id == seg.id } }
                     } else {
                         LiveTextEditor(text: $seg.text,
                                        highlight: hit?.seg == seg.id ? hit?.range : nil,
@@ -110,7 +111,11 @@ struct BlockEditor: View {
         .onChange(of: find) { _, f in if let f { locate(f) } }
         .onChange(of: hit?.token) { _, _ in
             guard let h = hit, segs.first(where: { $0.id == h.seg })?.isCode == true else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { withAnimation { proxy.scrollTo(h.seg, anchor: .center) } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo(h.seg, anchor: .center) } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                withAnimation(.easeInOut(duration: 0.3).repeatCount(5, autoreverses: true)) { glow = h.seg }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { withAnimation(.easeOut(duration: 0.3)) { glow = nil } }
+            }
         }
         .onChange(of: text) { _, new in
             if SegCodec.serialize(segs) != new { segs = SegCodec.parse(new) }
@@ -129,6 +134,7 @@ struct BlockEditor: View {
 
 struct CodeEditorCard: View {
     @Binding var seg: Seg
+    var glow = false
     var onDelete: () -> Void
     @State private var copied = false
 
@@ -156,5 +162,6 @@ struct CodeEditorCard: View {
         .background(Color.primary.opacity(0.03))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.line))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange, lineWidth: 3).opacity(glow ? 1 : 0))
     }
 }
